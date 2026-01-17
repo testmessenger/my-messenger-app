@@ -6,9 +6,9 @@ from flask_socketio import SocketIO, emit, join_room
 from pymongo import MongoClient
 
 app = Flask(__name__)
+# Увеличили лимит до 100МБ для передачи тяжелых файлов
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=100 * 1024 * 1024)
 
-# Подключение к БД
 MONGO_URL = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 client = MongoClient(MONGO_URL, connect=False)
 db = client['messenger_db']
@@ -24,7 +24,7 @@ def login(data):
     if user:
         if user['password'] == data['pass']:
             emit('login_success', {"name": user['name'], "nick": nick, "avatar": user.get('avatar', ''), "bio": user.get('bio', '')})
-        else: emit('login_error', "Ошибка пароля")
+        else: emit('login_error', "Ошибка")
     else:
         new_u = {"nick": nick, "password": data['pass'], "name": nick, "avatar": "", "bio": ""}
         users_col.insert_one(new_u)
@@ -40,8 +40,6 @@ def handle_msg(data):
 
 @socketio.on('delete_message')
 def delete_msg(data):
-    # data: {msg_id, room, nick}
-    # Проверяем, что удаляет автор (базовая защита)
     msg = messages_col.find_one({"id": data['msg_id']})
     if msg and msg['nick'] == data['nick']:
         messages_col.delete_one({"id": data['msg_id']})

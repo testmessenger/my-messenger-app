@@ -2,61 +2,71 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiteGram Ultra Fixed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LiteGram Ultra Max</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
-        :root { --bg: #0e1621; --surf: #17212b; --prim: #2481cc; --text: #fff; --msg: #182533; }
-        * { box-sizing: border-box; }
-        body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        :root { --bg: #0e1621; --surf: #17212b; --prim: #2481cc; --text: #fff; --msg: #182533; --border: #000; }
+        .light-theme { --bg: #f0f2f5; --surf: #ffffff; --prim: #0088cc; --text: #000; --msg: #ffffff; --border: #ddd; }
         
-        /* Боковая панель чатов */
-        #sidebar { width: 320px; background: var(--surf); border-right: 1px solid #000; display: flex; flex-direction: column; }
-        .header { padding: 15px; background: var(--surf); border-bottom: 1px solid #000; display: flex; align-items: center; justify-content: space-between; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; object-fit: cover; background: #333; }
+        * { box-sizing: border-box; transition: background 0.2s, color 0.2s; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; display: flex; height: 100vh; }
         
-        /* Зона сообщений */
-        #chat-area { flex: 1; display: flex; flex-direction: column; background: #080e15; }
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 80%; padding: 10px; border-radius: 12px; background: var(--msg); }
-        .my { align-self: flex-end; background: var(--prim); }
-        
-        /* Правая панель участников */
-        #right-bar { width: 280px; background: var(--surf); border-left: 1px solid #000; display: none; flex-direction: column; }
+        /* Мобильная адаптация */
+        #sidebar { width: 320px; background: var(--surf); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+        #chat-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+        #right-bar { width: 280px; background: var(--surf); border-left: 1px solid var(--border); display: none; flex-direction: column; }
 
-        .chat-item { padding: 12px; border-bottom: 1px solid #121b25; cursor: pointer; }
-        .chat-item:hover { background: #2b5278; }
-        .rank { font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-left: 5px;}
-        .rank-админ { background: #ff4757; }
-        
-        input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #0f161e; color: white; margin-top: 5px; }
-        .btn { padding: 8px 12px; border-radius: 5px; border: none; background: var(--prim); color: white; cursor: pointer; font-size: 12px; }
+        @media (max-width: 768px) {
+            #sidebar { width: 100%; position: absolute; left: 0; top: 0; height: 100%; display: flex; }
+            #sidebar.hidden { display: none; }
+            #chat-area { width: 100%; }
+            #right-bar { width: 100%; position: absolute; right: 0; z-index: 20; }
+        }
 
+        .header { padding: 10px 15px; background: var(--surf); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; min-height: 60px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; object-fit: cover; background: #333; border: 1px solid var(--prim); }
+        
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
+        .msg { max-width: 85%; padding: 8px 12px; border-radius: 15px; background: var(--msg); position: relative; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .my { align-self: flex-end; background: var(--prim); color: #fff; }
+        
+        .reactions { font-size: 12px; margin-top: 5px; display: flex; gap: 3px; }
+        .reaction-btn { cursor: pointer; opacity: 0.6; }
+        .reaction-btn:hover { opacity: 1; }
+
+        .btn { padding: 8px 12px; border-radius: 20px; border: none; background: var(--prim); color: white; cursor: pointer; font-size: 13px; font-weight: 600; }
+        .del-btn { color: #ff4757; font-size: 10px; cursor: pointer; float: right; margin-left: 10px; }
+
+        input { width: 100%; padding: 12px; border-radius: 25px; border: 1px solid var(--border); background: var(--surf); color: var(--text); }
+        
         #modal-profile { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 2000; }
+        .theme-toggle { margin-top: 10px; background: #555; border-radius: 10px; padding: 5px; cursor: pointer; text-align: center; font-size: 12px; }
     </style>
 </head>
-<body>
+<body class="dark-theme">
 
     <div id="auth" style="position:fixed; inset:0; background:var(--bg); z-index:3000; display:flex; align-items:center; justify-content:center;">
-        <div style="background:var(--surf); padding:30px; border-radius:20px; width:320px; text-align:center;">
-            <h2>LiteGram</h2>
+        <div style="background:var(--surf); padding:30px; border-radius:25px; width:340px; text-align:center; border:1px solid var(--border);">
+            <h2 style="color:var(--prim); margin-bottom:20px;">LiteGram</h2>
             <input id="auth-nick" placeholder="@username">
             <input id="auth-pass" type="password" placeholder="Пароль">
-            <button class="btn" onclick="login()" style="width:100%; margin-top:10px;">ВОЙТИ</button>
+            <button class="btn" onclick="login()" style="width:100%; margin-top:15px; padding:15px;">ВОЙТИ</button>
         </div>
     </div>
 
     <div id="modal-profile">
-        <div style="background:var(--surf); padding:20px; border-radius:15px; width:300px;">
-            <h3>Профиль</h3>
+        <div style="background:var(--surf); padding:25px; border-radius:20px; width:320px; border:1px solid var(--border);">
+            <h3 style="margin-top:0">Настройки</h3>
             <center>
-                <label for="p-av-in"><img id="p-av-img" class="avatar" style="width:80px; height:80px;"></label>
+                <label for="p-av-in"><img id="p-av-img" class="avatar" style="width:100px; height:100px;"></label>
                 <input type="file" id="p-av-in" style="display:none" onchange="previewAv(this)">
+                <div class="theme-toggle" onclick="toggleTheme()">🌓 Переключить тему</div>
             </center>
-            <input id="p-name" placeholder="Имя">
-            <input id="p-bio" placeholder="О себе">
-            <button class="btn" onclick="saveProfile()" style="width:100%; margin-top:10px;">Сохранить</button>
-            <button class="btn" onclick="closeProfile()" style="width:100%; background:#444; margin-top:5px;">Закрыть</button>
+            <input id="p-name" placeholder="Отображаемое имя" style="margin-top:15px;">
+            <input id="p-bio" placeholder="Статус">
+            <button class="btn" onclick="saveProfile()" style="width:100%; margin-top:15px;">Сохранить</button>
+            <button class="btn" onclick="closeProfile()" style="width:100%; background:#777; margin-top:8px;">Закрыть</button>
         </div>
     </div>
 
@@ -64,28 +74,36 @@
         <div class="header">
             <img id="my-av" class="avatar" onclick="openProfile()">
             <b id="my-name">...</b>
+            <button onclick="toggleSidebar(true)" class="btn" style="padding:5px 10px; display:none" id="mob-close">×</button>
         </div>
         <div style="padding:10px;"><input id="search-in" placeholder="Поиск..." oninput="doSearch(this.value)"></div>
         <div id="chats-list" style="flex:1; overflow-y:auto;"></div>
-        <div style="padding:10px; display:flex; gap:5px;">
-            <button class="btn" onclick="createRoom('group')" style="flex:1">+ Группа</button>
-            <button class="btn" onclick="createRoom('channel')" style="flex:1">+ Канал</button>
+        <div style="padding:15px; display:flex; gap:5px;">
+            <button class="btn" onclick="createRoom('group')" style="flex:1">Группа</button>
+            <button class="btn" onclick="createRoom('channel')" style="flex:1; background:#2c3b4a;">Канал</button>
         </div>
     </div>
 
     <div id="chat-area">
         <div class="header">
-            <b id="chat-title">Выберите чат</b>
-            <button class="btn" onclick="toggleRight()">Участники</button>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button onclick="toggleSidebar(false)" class="btn" style="padding:5px 10px; display:none" id="mob-back">←</button>
+                <b id="chat-title">Выберите чат</b>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" onclick="startCall()" style="background:#27ae60">📞</button>
+                <button class="btn" onclick="toggleRight()">👤</button>
+            </div>
         </div>
         <div id="messages"></div>
-        <div class="header">
+        <div class="header" style="padding:10px;">
             <input id="msg-in" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') send()">
+            <button onclick="send()" style="background:none; border:none; color:var(--prim); font-size:24px; cursor:pointer; margin-left:10px;">➤</button>
         </div>
     </div>
 
     <div id="right-bar">
-        <div class="header"><b>Участники</b></div>
+        <div class="header"><b>Участники</b> <button onclick="toggleRight()" class="btn">×</button></div>
         <div id="members-list" style="flex:1; overflow-y:auto; padding:10px;"></div>
     </div>
 
@@ -106,32 +124,9 @@
         function updateUI() {
             document.getElementById('my-name').innerText = me.name;
             document.getElementById('my-av').src = me.avatar || 'https://via.placeholder.com/40';
-            document.getElementById('p-av-img').src = me.avatar || 'https://via.placeholder.com/80';
+            document.getElementById('p-av-img').src = me.avatar || 'https://via.placeholder.com/100';
             document.getElementById('p-name').value = me.name;
             document.getElementById('p-bio').value = me.bio;
-        }
-
-        function doSearch(q) {
-            if(q.trim()) socket.emit('search', {query: q});
-            else socket.emit('get_my_rooms', {nick: me.nick});
-        }
-
-        socket.on('search_results', d => {
-            const l = document.getElementById('chats-list'); l.innerHTML = '';
-            d.users.forEach(u => {
-                if(u.nick !== me.nick) l.insertAdjacentHTML('beforeend', `<div class="chat-item" onclick="openLS('${u.nick}')">👤 @${u.nick} (ЛС)</div>`);
-            });
-            d.rooms.forEach(r => {
-                l.insertAdjacentHTML('beforeend', `<div class="chat-item">👥 ${r.name} <button class="btn" style="padding:2px 5px; font-size:10px" onclick="joinRoom('${r.id}')">Вступить</button></div>`);
-            });
-        });
-
-        function joinRoom(id) { socket.emit('join_room_request', {room_id: id, nick: me.nick}); }
-        socket.on('load_rooms_trigger', () => socket.emit('get_my_rooms', {nick: me.nick}));
-
-        function openLS(target) {
-            const id = [me.nick, target].sort().join('_ls_');
-            switchRoom(id, `@${target}`);
         }
 
         function switchRoom(id, title) {
@@ -139,6 +134,7 @@
             document.getElementById('messages').innerHTML = '';
             socket.emit('join', {room: id});
             socket.emit('get_members', {room: id});
+            if(window.innerWidth < 768) toggleSidebar(true);
         }
 
         function send() {
@@ -154,50 +150,85 @@
 
         function addMsg(d) {
             const b = document.getElementById('messages');
-            b.insertAdjacentHTML('beforeend', `<div class="msg ${d.nick===me.nick?'my':''}"><b>${d.user} <span class="rank rank-${(d.rank||'').toLowerCase()}">${d.rank||''}</span></b><br>${d.text}</div>`);
+            const isMy = d.nick === me.nick;
+            const reacts = Object.values(d.reactions || {}).join(' ');
+            
+            b.insertAdjacentHTML('beforeend', `
+                <div class="msg ${isMy?'my':''}" id="m-${d.id}">
+                    <b style="font-size:11px;">${d.user}</b>
+                    ${isMy ? `<span class="del-btn" onclick="delMsg('${d.id}')">🗑</span>` : ''}
+                    <div style="margin:4px 0;">${d.text}</div>
+                    <div class="reactions">
+                        <span class="reaction-btn" onclick="react('${d.id}', '👍')">👍</span>
+                        <span class="reaction-btn" onclick="react('${d.id}', '❤️')">❤️</span>
+                        <span id="re-${d.id}">${reacts}</span>
+                    </div>
+                </div>`);
             b.scrollTop = b.scrollHeight;
         }
 
-        function createRoom(type) {
-            const n = prompt("Название:");
-            if(n) socket.emit('create_room', {id: type+'_'+Date.now(), name: n, type: type, creator: me.nick});
-        }
+        function delMsg(id) { if(confirm("Удалить?")) socket.emit('delete_msg', {id: id, nick: me.nick}); }
+        socket.on('msg_deleted', id => { document.getElementById('m-'+id)?.remove(); });
 
-        socket.on('room_created', () => socket.emit('get_my_rooms', {nick: me.nick}));
-        socket.on('load_rooms', rs => {
-            const l = document.getElementById('chats-list'); l.innerHTML = '<div class="chat-item" onclick="switchRoom(\'global\',\'🌍 Общий чат\')">🌍 Общий чат</div>';
-            rs.forEach(r => l.insertAdjacentHTML('beforeend', `<div class="chat-item" onclick="switchRoom('${r.id}','${r.name}')">👥 ${r.name}</div>`));
+        function react(id, emoji) { socket.emit('add_reaction', {msg_id: id, emoji: emoji, nick: me.nick}); }
+        socket.on('update_reactions', d => {
+            const el = document.getElementById('re-'+d.id);
+            if(el) el.innerText = Object.values(d.reactions || {}).join(' ');
         });
 
         socket.on('members_list', ms => {
             const l = document.getElementById('members-list'); l.innerHTML = '';
             ms.forEach(m => {
-                const canBan = (me.rank === 'Админ' || me.rank === 'Модератор') && m.nick !== me.nick;
-                l.insertAdjacentHTML('beforeend', `<div style="margin-bottom:10px">
-                    <b>${m.name}</b> <span class="rank rank-${m.rank.toLowerCase()}">${m.rank}</span><br>
-                    <small>@${m.nick}</small>
-                    ${canBan ? `<br><button class="btn" style="background:red; font-size:9px; padding:2px" onclick="ban('${m.nick}')">БАН</button>` : ''}
-                </div>`);
+                l.insertAdjacentHTML('beforeend', `
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:5px;">
+                        <img class="avatar" style="width:35px; height:35px" src="${m.avatar || 'https://via.placeholder.com/35'}">
+                        <div style="flex:1">
+                            <div style="font-size:14px; font-weight:bold;">${m.name}</div>
+                            <div style="font-size:11px; opacity:0.6;">@${m.nick}</div>
+                        </div>
+                    </div>`);
             });
         });
 
-        function ban(nick) { if(confirm("Забанить?")) socket.emit('ban_user', {target_nick: nick, admin_nick: me.nick}); }
-        socket.on('kick_signal', nick => { if(me.nick === nick) location.reload(); });
-
+        function toggleTheme() { document.body.classList.toggle('light-theme'); }
         function openProfile() { document.getElementById('modal-profile').style.display='flex'; }
         function closeProfile() { document.getElementById('modal-profile').style.display='none'; }
+        
         function previewAv(i) {
             const r = new FileReader(); r.onload = e => { tempAv = e.target.result; document.getElementById('p-av-img').src = tempAv; };
             r.readAsDataURL(i.files[0]);
         }
+
         function saveProfile() {
             me.name = document.getElementById('p-name').value;
             me.bio = document.getElementById('p-bio').value;
             if(tempAv) me.avatar = tempAv;
-            socket.emit('update_profile', me);
-            updateUI(); closeProfile();
+            socket.emit('update_profile', me); updateUI(); closeProfile();
         }
+
+        function toggleSidebar(hide) {
+            const s = document.getElementById('sidebar');
+            if(hide) s.classList.add('hidden'); else s.classList.remove('hidden');
+        }
+
         function toggleRight() { const b = document.getElementById('right-bar'); b.style.display = (b.style.display==='flex')?'none':'flex'; }
+        function startCall() { alert("Вызов @"+currentRoom+"...\n(WebRTC соединение устанавливается)"); }
+
+        socket.on('load_rooms', rs => {
+            const l = document.getElementById('chats-list'); l.innerHTML = '<div class="chat-item" onclick="switchRoom(\'global\',\'🌍 Общий чат\')">🌍 <b>Общий чат</b></div>';
+            rs.forEach(r => l.insertAdjacentHTML('beforeend', `<div class="chat-item" onclick="switchRoom('${r.id}','${r.name}')">👥 <b>${r.name}</b></div>`));
+        });
+
+        function doSearch(q) {
+            if(q.trim()) socket.emit('search', {query: q});
+            else socket.emit('get_my_rooms', {nick: me.nick});
+        }
+        
+        socket.on('search_results', d => {
+            const l = document.getElementById('chats-list'); l.innerHTML = '';
+            d.users.forEach(u => l.insertAdjacentHTML('beforeend', `<div class="chat-item" onclick="openLS('${u.nick}')">👤 @${u.nick}</div>`));
+            d.rooms.forEach(r => l.insertAdjacentHTML('beforeend', `<div class="chat-item">👥 ${r.name} <button onclick="socket.emit('join_room_request',{room_id:'${r.id}',nick:me.nick})">Вступить</button></div>`));
+        });
     </script>
 </body>
 </html>

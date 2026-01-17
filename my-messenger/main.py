@@ -35,7 +35,7 @@ def login(data):
 def handle_msg(data):
     user = users_col.find_one({"nick": data['nick']})
     if user and not user.get('banned'):
-        data['id'] = str(os.urandom(8).hex()) # Уникальный ID сообщения
+        data['id'] = str(os.urandom(8).hex())
         data['rank'] = user.get('rank', 'Участник')
         data['reactions'] = {}
         messages_col.insert_one(data.copy())
@@ -49,7 +49,6 @@ def delete_msg(data):
 
 @socketio.on('add_reaction')
 def add_reaction(data):
-    # data: {msg_id, emoji, nick}
     messages_col.update_one({"id": data['msg_id']}, {"$set": {f"reactions.{data['nick']}": data['emoji']}})
     msg = messages_col.find_one({"id": data['msg_id']}, {"_id":0})
     emit('update_reactions', msg, broadcast=True)
@@ -85,11 +84,15 @@ def create_r(data):
 @socketio.on('get_members')
 def get_m(data=None):
     if data and 'room' in data:
+        if '_ls_' in data['room']:
+            nicks = data['room'].split('_ls_')
+            m_list = list(users_col.find({"nick": {"$in": nicks}}, {"_id":0, "password":0}))
+            return emit('members_list', m_list)
         room = rooms_col.find_one({"id": data['room']})
         if room and 'members' in room:
             m_list = list(users_col.find({"nick": {"$in": room['members']}}, {"_id":0, "password":0}))
             return emit('members_list', m_list)
-    emit('members_list', list(users_col.find({"banned": {"$ne": True}}, {"_id":0, "password":0}).limit(20)))
+    emit('members_list', list(users_col.find({}, {"_id":0, "password":0}).limit(10)))
 
 @socketio.on('update_profile')
 def update_profile(data):

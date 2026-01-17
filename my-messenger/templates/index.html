@@ -13,22 +13,23 @@
         #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .input-ui { background: var(--surface); border: 1px solid var(--gray); color: var(--text); padding: 12px; border-radius: 8px; margin: 8px; width: 280px; }
 
-        #sidebar { width: 260px; background: var(--surface); border-right: 1px solid rgba(0,0,0,0.2); display: flex; flex-direction: column; }
-        #chat-window { flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.05); }
-        #member-list { width: 200px; background: var(--surface); border-left: 1px solid rgba(0,0,0,0.2); padding: 10px; }
-
-        .header { background: var(--surface); height: 60px; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid rgba(0,0,0,0.2); justify-content: space-between; }
-        .chat-item { padding: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        #sidebar { width: 280px; background: var(--surface); border-right: 1px solid rgba(0,0,0,0.2); display: flex; flex-direction: column; }
+        #chat-window { flex: 1; display: flex; flex-direction: column; position: relative; }
+        
+        .header { background: var(--surface); height: 60px; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid rgba(0,0,0,0.2); gap: 10px; }
+        .chat-item { padding: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 10px; }
         .chat-item.active { background: var(--primary); }
 
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { background: var(--surface); padding: 10px; border-radius: 12px; max-width: 80%; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-        .msg-actions { display: none; position: absolute; top: -20px; right: 0; background: var(--primary); border-radius: 5px; padding: 2px 5px; gap: 5px; }
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .msg { background: var(--surface); padding: 10px; border-radius: 12px; max-width: 70%; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .msg img { max-width: 100%; border-radius: 8px; margin-top: 5px; cursor: pointer; }
+        .msg-actions { display: none; position: absolute; top: -15px; right: 5px; background: var(--primary); border-radius: 5px; padding: 2px 5px; }
         .msg:hover .msg-actions { display: flex; }
-        .action-btn { cursor: pointer; font-size: 10px; color: white; border: none; background: none; }
 
-        .input-area { padding: 15px; background: var(--surface); display: flex; gap: 10px; }
+        .input-area { padding: 15px; background: var(--surface); display: flex; gap: 10px; align-items: center; }
         .input-area input { flex: 1; background: var(--bg); color: var(--text); border: none; padding: 12px; border-radius: 8px; outline: none; }
+        .file-label { cursor: pointer; font-size: 24px; color: var(--gray); }
+        #file-input { display: none; }
     </style>
 </head>
 <body>
@@ -44,27 +45,25 @@
     <div id="main-container" style="display:none; width: 100%;">
         <div id="sidebar">
             <div class="header">
-                <button onclick="toggleTheme()" style="background:none; border:none; font-size:20px;">🌓</button>
-                <input type="text" placeholder="Поиск..." style="width:100px; background:var(--bg); color:var(--text); border:none; border-radius:10px; padding:5px;" oninput="renderList(this.value)">
+                <input type="text" id="user-search" placeholder="Поиск @юзера..." style="width:70%; background:var(--bg); color:var(--text); border:none; padding:8px; border-radius:8px;">
+                <button onclick="searchUser()" style="background:var(--primary); color:white; border:none; border-radius:5px; padding:8px;">🔍</button>
             </div>
             <div id="list-items" style="flex:1; overflow-y:auto;"></div>
-            <button onclick="createRoom()" style="padding:15px; background: var(--primary); color:white; border:none;">+ СОЗДАТЬ ЧАТ</button>
+            <button onclick="createRoom()" style="padding:15px; background: var(--primary); color:white; border:none;">+ СОЗДАТЬ ГРУППУ</button>
         </div>
 
         <div id="chat-window">
             <div class="header">
-                <div><b id="chat-title">Выберите чат</b> <button id="del-chat-btn" onclick="deleteCurrentChat()" style="display:none; color:red; font-size:10px; background:none; border:1px solid red;">Удалить чат</button></div>
+                <b id="chat-title">Выберите чат</b>
+                <button onclick="toggleTheme()" style="background:none; border:none; font-size:20px; cursor:pointer;">🌓</button>
             </div>
             <div id="messages"></div>
             <div class="input-area">
+                <label for="file-input" class="file-label">📎</label>
+                <input type="file" id="file-input" onchange="sendFile(this)">
                 <input type="text" id="msg-input" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') send()">
-                <button onclick="send()" style="background:none; border:none; color:var(--primary); font-size:24px;">➤</button>
+                <button onclick="send()" style="background:none; border:none; color:var(--primary); font-size:24px; cursor:pointer;">➤</button>
             </div>
-        </div>
-
-        <div id="member-list">
-            <h4>Участники</h4>
-            <div id="member-items"></div>
         </div>
     </div>
 
@@ -72,11 +71,11 @@
         const socket = io();
         let me = null;
         let currentRoom = "Общий чат";
-        let allRooms = ["Общий чат"];
+        let chatList = ["Общий чат"];
 
         function login() {
             const name = document.getElementById('r-name').value;
-            const nick = document.getElementById('r-user').value.replace('@','');
+            const nick = document.getElementById('r-user').value.replace('@','').toLowerCase();
             const pass = document.getElementById('r-pass').value;
             if(name && nick && pass) socket.emit('login_attempt', { name, nick, pass });
         }
@@ -89,11 +88,12 @@
             renderList();
         });
 
-        socket.on('login_error', (msg) => alert(msg));
-
-        function renderList(f = "") {
-            document.getElementById('list-items').innerHTML = allRooms.filter(r => r.toLowerCase().includes(f.toLowerCase())).map(r => 
-                `<div class="chat-item ${r === currentRoom ? 'active' : ''}" onclick="switchRoom('${r}')"># ${r}</div>`).join('');
+        function renderList() {
+            document.getElementById('list-items').innerHTML = chatList.map(r => 
+                `<div class="chat-item ${r === currentRoom ? 'active' : ''}" onclick="switchRoom('${r}')">
+                    <div style="width:35px; height:35px; border-radius:50%; background:var(--gray); display:flex; align-items:center; justify-content:center;">${r[0]}</div>
+                    <span>${r}</span>
+                </div>`).join('');
         }
 
         function switchRoom(name) {
@@ -104,6 +104,17 @@
             renderList();
         }
 
+        function searchUser() {
+            const q = document.getElementById('user-search').value;
+            if(q) socket.emit('search_user', { query: q });
+        }
+
+        socket.on('user_found', (u) => {
+            const privateRoom = [me.nick, u.nick].sort().join('_');
+            if(!chatList.includes(privateRoom)) chatList.push(privateRoom);
+            switchRoom(privateRoom);
+        });
+
         function send() {
             const el = document.getElementById('msg-input');
             if(el.value.trim()) {
@@ -112,59 +123,62 @@
             }
         }
 
+        function sendFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                socket.emit('message', {
+                    user: me.name, nick: '@'+me.nick, room: currentRoom,
+                    file: e.target.result, file_type: file.type, text: file.name
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+
         function addMsg(data) {
             const m = document.getElementById('messages');
             const isMy = data.nick === '@' + me.nick;
-            const msgHtml = `
-                <div class="msg" id="msg-${data._id}" style="${isMy ? 'align-self: flex-end;' : ''}">
+            let content = `<span>${data.text}</span>`;
+            if(data.file) {
+                if(data.file_type.startsWith('image/')) {
+                    content = `<img src="${data.file}"><br><small>${data.text}</small>`;
+                } else {
+                    content = `<a href="${data.file}" download="${data.text}" style="color:var(--primary)">📄 ${data.text}</a>`;
+                }
+            }
+            const html = `
+                <div class="msg" id="msg-${data._id}" style="${isMy ? 'align-self: flex-end; border-right: 3px solid var(--primary);' : ''}">
                     <div class="msg-actions">
-                        ${isMy ? `<button class="action-btn" onclick="editMsg('${data._id}', '${data.text}')">✎</button>` : ''}
-                        ${isMy ? `<button class="action-btn" onclick="deleteMsg('${data._id}')">🗑</button>` : ''}
+                        ${isMy ? `<button onclick="editMsg('${data._id}','${data.text}')" style="color:white; border:none; background:none; cursor:pointer;">✎</button>` : ''}
+                        ${isMy ? `<button onclick="deleteMsg('${data._id}')" style="color:white; border:none; background:none; cursor:pointer;">🗑</button>` : ''}
                     </div>
-                    <b>${data.user}</b> <br>
-                    <span class="text-content">${data.text}</span>
+                    <b style="font-size:0.8em; color:var(--primary)">${data.user}</b><br>${content}
                 </div>`;
-            m.insertAdjacentHTML('beforeend', msgHtml);
+            m.insertAdjacentHTML('beforeend', html);
             m.scrollTop = m.scrollHeight;
         }
 
         socket.on('render_message', (data) => { if(data.room === currentRoom) addMsg(data); });
         socket.on('history', (msgs) => msgs.forEach(m => addMsg(m)));
-
-        // ФУНКЦИИ УДАЛЕНИЯ И ИЗМЕНЕНИЯ
+        
         function deleteMsg(id) { if(confirm("Удалить?")) socket.emit('delete_message', { msg_id: id, room: currentRoom }); }
         socket.on('message_deleted', (data) => document.getElementById(`msg-${data.msg_id}`)?.remove());
 
-        function editMsg(id, oldText) {
-            const newText = prompt("Измените сообщение:", oldText);
-            if(newText && newText !== oldText) {
-                socket.emit('edit_message', { msg_id: id, new_text: newText, room: currentRoom });
-            }
+        function editMsg(id, old) {
+            const n = prompt("Изменить:", old);
+            if(n && n !== old) socket.emit('edit_message', { msg_id: id, new_text: n, room: currentRoom });
         }
-        socket.on('message_edited', (data) => {
-            const el = document.querySelector(`#msg-${data.msg_id} .text-content`);
-            if(el) el.innerText = data.new_text;
-        });
-
-        function deleteCurrentChat() {
-            if(confirm("Удалить весь чат навсегда?")) socket.emit('delete_chat', { room: currentRoom, requester: me.nick });
-        }
-        socket.on('chat_deleted', (data) => {
-            alert("Чат удален владельцем");
-            allRooms = allRooms.filter(r => r !== data.room);
-            switchRoom("Общий чат");
-        });
-
-        socket.on('room_info', (data) => {
-            document.getElementById('del-chat-btn').style.display = (data.owner === me.nick && data.name !== "Общий чат") ? 'inline' : 'none';
-            document.getElementById('member-items').innerHTML = data.members.map(m => `<div>@${m}</div>`).join('');
+        socket.on('message_edited', (d) => {
+            const txt = document.querySelector(`#msg-${d.msg_id} span`);
+            if(txt) txt.innerText = d.new_text;
         });
 
         function createRoom() {
-            const n = prompt("Имя чата:");
-            if(n) { socket.emit('create_room', { name: n, type: 'group', user: me.nick }); allRooms.push(n); switchRoom(n); }
+            const n = prompt("Имя группы:");
+            if(n) { socket.emit('create_room', { name: n, user: me.nick, type: 'group' }); chatList.push(n); switchRoom(n); }
         }
-        socket.on('room_created', (data) => { if(!allRooms.includes(data.name)) { allRooms.push(data.name); renderList(); } });
+        socket.on('room_created', (d) => { if(!chatList.includes(d.name)) { chatList.push(d.name); renderList(); } });
         function toggleTheme() { document.body.classList.toggle('light-mode'); }
     </script>
 </body>

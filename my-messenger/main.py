@@ -5,7 +5,6 @@ import os, time
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit, join_room
 from pymongo import MongoClient
-from bson import ObjectId
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=20 * 1024 * 1024)
@@ -21,52 +20,58 @@ def index(): return render_template('index.html')
 
 @socketio.on('login_attempt')
 def login(data):
-    nick = data['nick'].replace('@', '').lower()
+    nick = data['nick'].replace('@', '').lower().strip()
+    password = data['pass'].strip()
+    name = data.get('name') or nick
+    
+    if not nick or not password:
+        emit('login_error', "Заполните все поля!")
+        return
+
     user = users_col.find_one({"nick": nick})
     if user:
-        if user['password'] == data['pass']:
+        if user['password'] == password:
             emit('login_success', {"name": user['name'], "nick": nick, "avatar": user.get('avatar', '')})
-        else: emit('login_error', "Неверный пароль!")
+        else:
+            emit('login_error', "Неверный пароль!")
     else:
-        new_user = {"nick": nick, "password": data['pass'], "name": data['name'], "avatar": ""}
-        users_col.insert_one(new_user)
-        emit('login_success', {"name": data['name'], "nick": nick, "avatar": ""})
+        users_col.insert_one({"nick": nick, "password": password, "name": name, "avatar": ""})
+        emit('login_success', {"name": name, "nick": nick, "avatar": ""})
 
-@socketio.on('update_profile_image')
-def update_img(data):
-    users_col.update_one({"nick": data['nick']}, {"$set": {"avatar": data['img']}})
+@socketio.on('get_rooms')
+def get_rooms():
+    # Отдаем все существующие комнаты (группы/каналы)
+    rooms = list(rooms_col.find({}, {"_id": 0}))
+    emit('load_rooms', rooms)
+
+@socketio.on('create_room')
+def create_r(data):
+    if not rooms_col.find_one({"id": data['id']}):
+        rooms_col.insert_one(data)
+        emit('room_created', data, broadcast=True)
 
 @socketio.on('search')
 def search(data):
-    q = data['query'].lower()
+    q = data['query'].lower().strip()
+    if not q: return
     users = list(users_col.find({"nick": {"$regex": q}}, {"_id":0, "password":0}))
-    rooms = list(rooms_col.find({"name": {"$regex": q}}, {"_id":0}))
+    rooms = list(rooms_col.find({"name": {"$regex": q, "$options": "i"}}, {"_id":0}))
     emit('search_results', {"users": users, "rooms": rooms})
 
 @socketio.on('message')
 def handle_msg(data):
-    data['time'] = time.time()
-    res = messages_col.insert_one(data.copy())
-    data['_id'] = str(res.inserted_id)
+    messages_col.insert_one(data)
     emit('render_message', data, to=data['room'])
 
 @socketio.on('join')
 def on_join(data):
-    room = data['room']
-    join_room(room)
-    # Загружаем последние 50 сообщений
-    h = list(messages_col.find({"room": room}).sort("_id", -1).limit(50))
-    for m in h: m['_id'] = str(m['_id'])
-    emit('history', h[::-1])
+    join_room(data['room'])
+    h = list(messages_col.find({"room": data['room']}).sort("_id", -1).limit(50))
+    emit('history', [ {k:v for k,v in m.items() if k != '_id'} for m in h[::-1] ])
 
-@socketio.on('get_my_rooms')
-def get_rooms():
-    emit('load_rooms', list(rooms_col.find({}, {"_id": 0})))
-
-@socketio.on('create_room')
-def create_r(data):
-    rooms_col.update_one({"id": data['id']}, {"$set": data}, upsert=True)
-    emit('room_created', data, broadcast=True)
+@socketio.on('update_profile_image')
+def update_img(data):
+    users_col.update_one({"nick": data['nick']}, {"$set": {"avatar": data['img']}})
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

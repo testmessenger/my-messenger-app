@@ -3,235 +3,221 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LiteGram Ultra Complete</title>
+    <title>LiteGram Ultra Pro</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
         :root { --bg: #0e1621; --surf: #17212b; --prim: #2481cc; --text: #fff; --msg: #182533; --border: #000; }
         .light-theme { --bg: #f0f2f5; --surf: #ffffff; --prim: #0088cc; --text: #000; --msg: #ffffff; --border: #ddd; }
         
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; transition: background 0.2s; }
         body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
-        #sidebar { width: 320px; background: var(--surf); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+        /* Сетка приложения */
+        #sidebar { width: 320px; background: var(--surf); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
         #chat-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; }
         #right-bar { width: 280px; background: var(--surf); border-left: 1px solid var(--border); display: none; flex-direction: column; }
 
+        /* Мобильная адаптация */
         @media (max-width: 768px) {
-            #sidebar { width: 100%; position: absolute; left: 0; top: 0; height: 100%; z-index: 100; }
+            #sidebar { width: 100%; position: absolute; z-index: 100; }
             #sidebar.hidden { display: none; }
-            #right-bar { width: 100%; position: absolute; right: 0; z-index: 200; }
+            #right-bar { width: 100%; position: absolute; z-index: 200; }
         }
 
         .header { padding: 10px 15px; background: var(--surf); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; min-height: 60px; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; object-fit: cover; background: #333; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; background: #333; }
         
-        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { max-width: 85%; padding: 8px 12px; border-radius: 15px; background: var(--msg); position: relative; border: 1px solid var(--border); }
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 85%; padding: 10px; border-radius: 15px; background: var(--msg); border: 1px solid var(--border); position: relative; }
         .my { align-self: flex-end; background: var(--prim); color: #fff; }
-        
-        .reactions { font-size: 12px; margin-top: 5px; display: flex; gap: 5px; cursor: pointer; }
-        .btn { padding: 8px 15px; border-radius: 20px; border: none; background: var(--prim); color: white; cursor: pointer; font-size: 13px; font-weight: bold; }
-        .del-btn { color: #ff4757; font-size: 12px; cursor: pointer; margin-left: 10px; }
 
-        input { width: 100%; padding: 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surf); color: var(--text); }
-        .chat-item { padding: 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 10px; }
-        .chat-item:hover { background: rgba(255,255,255,0.05); }
+        .btn { padding: 8px 12px; border-radius: 20px; border: none; background: var(--prim); color: white; cursor: pointer; font-weight: bold; }
+        .rec-active { background: #ff4757 !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
-        #modal-profile { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 3000; }
+        /* Видео-сообщения */
+        .video-circle { width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 2px solid var(--prim); }
+        #v-preview { position: absolute; bottom: 80px; right: 20px; width: 120px; height: 120px; border-radius: 50%; border: 3px solid #ff4757; display: none; transform: scaleX(-1); object-fit: cover; background: #000; }
+
+        /* Интерфейс звонка */
+        #call-ui { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; }
     </style>
 </head>
 <body class="dark-theme">
 
-    <div id="auth" style="position:fixed; inset:0; background:var(--bg); z-index:4000; display:flex; align-items:center; justify-content:center;">
-        <div style="background:var(--surf); padding:30px; border-radius:20px; width:320px; text-align:center; border:1px solid var(--border);">
-            <h2>LiteGram</h2>
-            <input id="auth-nick" placeholder="@username">
-            <input id="auth-pass" type="password" placeholder="Пароль">
-            <button class="btn" onclick="login()" style="width:100%; margin-top:10px;">ВОЙТИ</button>
-        </div>
-    </div>
-
-    <div id="modal-profile">
-        <div style="background:var(--surf); padding:20px; border-radius:20px; width:300px; border:1px solid var(--border);">
-            <h3>Профиль</h3>
-            <center>
-                <label for="p-av-in"><img id="p-av-img" class="avatar" style="width:100px; height:100px;"></label>
-                <input type="file" id="p-av-in" style="display:none" onchange="previewAv(this)">
-                <div onclick="toggleTheme()" style="margin-top:10px; cursor:pointer; color:var(--prim)">🌓 Сменить тему</div>
-            </center>
-            <input id="p-name" placeholder="Имя" style="margin-top:10px;">
-            <input id="p-bio" placeholder="О себе">
-            <button class="btn" onclick="saveProfile()" style="width:100%; margin-top:10px;">Сохранить</button>
-            <button class="btn" onclick="closeProfile()" style="width:100%; background:#555; margin-top:5px;">Закрыть</button>
+    <div id="call-ui">
+        <h2 id="call-msg">Входящий вызов...</h2>
+        <div style="display:flex; gap:20px; margin-top:20px;">
+            <button class="btn" style="background:#27ae60; padding:15px 30px;" onclick="answer()">Ответить</button>
+            <button class="btn" style="background:#ff4757; padding:15px 30px;" onclick="endCall()">Сбросить</button>
         </div>
     </div>
 
     <div id="sidebar">
         <div class="header">
             <img id="my-av" class="avatar" onclick="openProfile()">
-            <b id="my-name">...</b>
+            <b id="my-name">Загрузка...</b>
         </div>
-        <div style="padding:10px;"><input id="search-in" placeholder="Поиск..." oninput="doSearch(this.value)"></div>
         <div id="chats-list" style="flex:1; overflow-y:auto;"></div>
-        <div style="padding:10px; display:flex; gap:5px;">
-            <button class="btn" onclick="createRoom('group')" style="flex:1">Группа</button>
-            <button class="btn" onclick="createRoom('channel')" style="flex:1; background:#333;">Канал</button>
-        </div>
     </div>
 
     <div id="chat-area">
+        <video id="v-preview" autoplay muted></video>
         <div class="header">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <button onclick="toggleSidebar(false)" class="btn" style="padding:5px 10px; display:none" id="mob-back">←</button>
-                <b id="chat-title">Выберите чат</b>
-            </div>
-            <div style="display:flex; gap:10px;">
-                <button class="btn" onclick="alert('Вызов...')">📞</button>
+            <button onclick="toggleSidebar(false)" id="back-btn" class="btn" style="display:none">←</button>
+            <b id="chat-title">Выберите чат</b>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" style="background:#27ae60" onclick="startCall()">📞</button>
                 <button id="members-btn" class="btn" onclick="toggleRight()">👤</button>
             </div>
         </div>
         <div id="messages"></div>
-        <div class="header">
+        <div class="header" style="gap:10px;">
+            <button id="v-btn" class="btn" onclick="toggleVideo()">📷</button>
             <input id="msg-in" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') send()">
+            <button id="a-btn" class="btn" onclick="toggleAudio()">🎤</button>
+            <button class="btn" onclick="send()">➤</button>
         </div>
     </div>
 
     <div id="right-bar">
         <div class="header"><b>Участники</b> <button onclick="toggleRight()" class="btn">×</button></div>
-        <div id="members-list" style="padding:10px; overflow-y:auto; flex:1;"></div>
+        <div id="members-list" style="padding:15px;"></div>
+    </div>
+
+    <div id="modal-prof" style="position:fixed; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; z-index:3000;">
+        <div style="background:var(--surf); padding:20px; border-radius:20px; width:300px; text-align:center;">
+            <h3>Профиль</h3>
+            <div class="btn" onclick="toggleTheme()" style="margin-bottom:10px;">🌓 Сменить тему</div>
+            <button class="btn" onclick="document.getElementById('modal-prof').style.display='none'" style="width:100%">Закрыть</button>
+        </div>
     </div>
 
     <script>
         const socket = io();
-        let me = null, currentRoom = 'global', tempAv = '';
+        let me = null, currentRoom = 'global', mediaRec, chunks = [], isRec = false;
 
-        function login() {
-            const u = document.getElementById('auth-nick').value, p = document.getElementById('auth-pass').value;
-            if(u && p) socket.emit('login_attempt', {nick: u, pass: p});
-        }
+        // Вход (упрощенный для примера)
+        const nick = prompt("Ваш ник?") || 'user'+Math.floor(Math.random()*1000);
+        socket.emit('login_attempt', {nick: nick, pass: '123'});
 
         socket.on('login_success', u => {
-            me = u; document.getElementById('auth').style.display = 'none';
-            updateUI(); socket.emit('get_my_rooms', {nick: me.nick}); switchRoom('global', '🌍 Общий чат');
+            me = u;
+            document.getElementById('my-name').innerText = u.name;
+            document.getElementById('my-av').src = u.avatar || 'https://via.placeholder.com/40';
+            socket.emit('get_my_rooms', {nick: me.nick});
+            switchRoom('global', '🌍 Общий чат');
         });
-
-        function updateUI() {
-            document.getElementById('my-name').innerText = me.name;
-            document.getElementById('my-av').src = me.avatar || 'https://via.placeholder.com/40';
-            document.getElementById('p-av-img').src = me.avatar || 'https://via.placeholder.com/100';
-            document.getElementById('p-name').value = me.name;
-            document.getElementById('p-bio').value = me.bio;
-        }
 
         function switchRoom(id, title) {
             currentRoom = id;
             document.getElementById('chat-title').innerText = title;
             document.getElementById('messages').innerHTML = '';
             
-            // ЛОГИКА ВЫРЕЗАНИЯ КНОПКИ ДЛЯ ЛС
+            // СКРЫТИЕ КНОПКИ УЧАСТНИКОВ В ЛС
             const mBtn = document.getElementById('members-btn');
-            if (id.includes('_ls_')) {
-                mBtn.style.display = 'none';
-                document.getElementById('right-bar').style.display = 'none';
-            } else {
-                mBtn.style.display = 'block';
-            }
-
+            mBtn.style.display = id.includes('_ls_') ? 'none' : 'block';
+            
             socket.emit('join', {room: id});
-            socket.emit('get_members', {room: id});
             if(window.innerWidth < 768) toggleSidebar(true);
         }
 
-        function send() {
+        // ОТПРАВКА
+        function send(media = null, type = 'text') {
             const i = document.getElementById('msg-in');
-            if(i.value.trim()) {
-                socket.emit('message', {room: currentRoom, text: i.value, nick: me.nick, user: me.name});
+            if(i.value.trim() || media) {
+                const data = { room: currentRoom, nick: me.nick, user: me.name };
+                if(type === 'voice') data.voice = media;
+                else if(type === 'video') data.video = media;
+                else data.text = i.value;
+                socket.emit('message', data);
                 i.value = '';
             }
         }
 
+        // ЗАПИСЬ ВИДЕО И АУДИО
+        async function startMedia(video) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: video });
+            if(video) { 
+                const v = document.getElementById('v-preview');
+                v.srcObject = stream; v.style.display = 'block';
+            }
+            mediaRec = new MediaRecorder(stream);
+            chunks = [];
+            mediaRec.ondataavailable = e => chunks.push(e.data);
+            mediaRec.onstop = () => {
+                const blob = new Blob(chunks, { type: video ? 'video/webm' : 'audio/webm' });
+                const r = new FileReader(); r.readAsDataURL(blob);
+                r.onloadend = () => send(r.result, video ? 'video' : 'voice');
+                stream.getTracks().forEach(t => t.stop());
+                document.getElementById('v-preview').style.display = 'none';
+            };
+            mediaRec.start();
+            isRec = true;
+        }
+
+        function toggleVideo() {
+            if(!isRec) { startMedia(true); document.getElementById('v-btn').classList.add('rec-active'); }
+            else { mediaRec.stop(); isRec = false; document.getElementById('v-btn').classList.remove('rec-active'); }
+        }
+
+        function toggleAudio() {
+            if(!isRec) { startMedia(false); document.getElementById('a-btn').classList.add('rec-active'); }
+            else { mediaRec.stop(); isRec = false; document.getElementById('a-btn').classList.remove('rec-active'); }
+        }
+
+        // РЕНДЕР
         socket.on('render_message', d => { if(d.room === currentRoom) addMsg(d); });
         socket.on('history', h => h.forEach(addMsg));
 
         function addMsg(d) {
             const b = document.getElementById('messages');
-            const isMy = d.nick === me.nick;
+            let html = `<div>${d.text}</div>`;
+            if(d.voice) html = `<audio controls src="${d.voice}"></audio>`;
+            if(d.video) html = `<video class="video-circle" src="${d.video}" autoplay loop muted onclick="this.muted=!this.muted"></video>`;
+            
             b.insertAdjacentHTML('beforeend', `
-                <div class="msg ${isMy?'my':''}" id="m-${d.id}">
-                    <div style="font-size:11px; font-weight:bold">${d.user} ${isMy ? `<span class="del-btn" onclick="delMsg('${d.id}')">🗑</span>` : ''}</div>
-                    <div>${d.text}</div>
-                    <div class="reactions">
-                        <span onclick="react('${d.id}','👍')">👍</span>
-                        <span onclick="react('${d.id}','❤️')">❤️</span>
-                        <small id="re-${d.id}">${Object.values(d.reactions||{}).join('')}</small>
-                    </div>
+                <div class="msg ${d.nick===me.nick?'my':''}" id="m-${d.id}">
+                    <small><b>${d.user}</b> <span onclick="delMsg('${d.id}')" style="cursor:pointer">🗑</span></small>
+                    ${html}
+                    <div style="font-size:12px; cursor:pointer" onclick="react('${d.id}','❤️')">❤️ ${Object.values(d.reactions||{}).filter(x=>x==='❤️').length || ''}</div>
                 </div>`);
             b.scrollTop = b.scrollHeight;
         }
 
+        // ФУНКЦИИ УПРАВЛЕНИЯ
         function delMsg(id) { socket.emit('delete_msg', {id: id, nick: me.nick}); }
         socket.on('msg_deleted', id => document.getElementById('m-'+id)?.remove());
 
-        function react(id, emoji) { socket.emit('add_reaction', {msg_id: id, emoji: emoji, nick: me.nick}); }
-        socket.on('update_reactions', d => {
-            const el = document.getElementById('re-'+d.id);
-            if(el) el.innerText = Object.values(d.reactions||{}).join('');
+        function startCall() {
+            socket.emit('call_signal', { to_room: currentRoom, from: me.name });
+            document.getElementById('call-ui').style.display = 'flex';
+            document.getElementById('call-msg').innerText = "Вызов...";
+        }
+        socket.on('incoming_call', d => {
+            document.getElementById('call-ui').style.display = 'flex';
+            document.getElementById('call-msg').innerText = "Звонок от " + d.from;
         });
+        function endCall() { document.getElementById('call-ui').style.display = 'none'; }
+        
+        function toggleTheme() { document.body.classList.toggle('light-theme'); }
+        function openProfile() { document.getElementById('modal-prof').style.display = 'flex'; }
+        function toggleSidebar(hide) { 
+            document.getElementById('sidebar').classList.toggle('hidden', hide); 
+            document.getElementById('back-btn').style.display = hide ? 'block' : 'none';
+        }
+        function toggleRight() { 
+            const rb = document.getElementById('right-bar');
+            rb.style.display = rb.style.display === 'flex' ? 'none' : 'flex';
+        }
 
-        socket.on('members_list', ms => {
-            const l = document.getElementById('members-list'); l.innerHTML = '';
-            ms.forEach(m => {
-                l.insertAdjacentHTML('beforeend', `<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px">
-                    <img src="${m.avatar || 'https://via.placeholder.com/30'}" class="avatar" style="width:30px; height:30px">
-                    <div><b>${m.name}</b><br><small>@${m.nick}</small></div>
-                </div>`);
+        socket.on('load_rooms', rs => {
+            const l = document.getElementById('chats-list');
+            l.innerHTML = '<div class="header"><b>Чаты</b></div>';
+            rs.forEach(r => {
+                l.insertAdjacentHTML('beforeend', `<div style="padding:15px; border-bottom:1px solid var(--border); cursor:pointer" onclick="switchRoom('${r.id}','${r.name}')">👥 ${r.name}</div>`);
             });
         });
-
-        function toggleTheme() { document.body.classList.toggle('light-theme'); }
-        function openProfile() { document.getElementById('modal-profile').style.display='flex'; }
-        function closeProfile() { document.getElementById('modal-profile').style.display='none'; }
-        function previewAv(i) {
-            const r = new FileReader(); r.onload = e => { tempAv = e.target.result; document.getElementById('p-av-img').src = tempAv; };
-            r.readAsDataURL(i.files[0]);
-        }
-        function saveProfile() {
-            me.name = document.getElementById('p-name').value;
-            me.bio = document.getElementById('p-bio').value;
-            if(tempAv) me.avatar = tempAv;
-            socket.emit('update_profile', me); updateUI(); closeProfile();
-        }
-
-        function toggleSidebar(hide) {
-            const s = document.getElementById('sidebar');
-            const btn = document.getElementById('mob-back');
-            if(hide) { s.classList.add('hidden'); btn.style.display='block'; }
-            else { s.classList.remove('hidden'); btn.style.display='none'; }
-        }
-
-        function toggleRight() { const b = document.getElementById('right-bar'); b.style.display = (b.style.display==='flex')?'none':'flex'; }
-        
-        function doSearch(q) {
-            if(q.trim()) socket.emit('search', {query: q});
-            else socket.emit('get_my_rooms', {nick: me.nick});
-        }
-
-        socket.on('search_results', d => {
-            const l = document.getElementById('chats-list'); l.innerHTML = '';
-            d.users.forEach(u => l.insertAdjacentHTML('beforeend', `<div class="chat-item" onclick="openLS('${u.nick}')">👤 @${u.nick}</div>`));
-            d.rooms.forEach(r => l.insertAdjacentHTML('beforeend', `<div class="chat-item">👥 ${r.name} <button onclick="socket.emit('join_room_request',{room_id:'${r.id}',nick:me.nick})">Вступить</button></div>`));
-        });
-
-        function openLS(t) { switchRoom([me.nick, t].sort().join('_ls_'), '@'+t); }
-        socket.on('load_rooms', rs => {
-            const l = document.getElementById('chats-list'); l.innerHTML = '<div class="chat-item" onclick="switchRoom(\'global\',\'🌍 Общий чат\')">🌍 Общий чат</div>';
-            rs.forEach(r => l.insertAdjacentHTML('beforeend', `<div class="chat-item" onclick="switchRoom('${r.id}','${r.name}')">👥 ${r.name}</div>`));
-        });
-        socket.on('load_rooms_trigger', () => socket.emit('get_my_rooms', {nick: me.nick}));
-        
-        // Автоматически прячем/показываем кнопки при изменении экрана
-        window.onresize = () => { if(window.innerWidth > 768) document.getElementById('sidebar').classList.remove('hidden'); };
-        if(window.innerWidth < 768) toggleSidebar(false);
     </script>
 </body>
 </html>

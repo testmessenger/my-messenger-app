@@ -7,11 +7,10 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret_messenger_key'
+app.config['SECRET_KEY'] = 'super-secret-key-2026'
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=1000 * 1024 * 1024)
 
-# Глобальная база данных в памяти сервера
-# Структура: { "название": { "type": "group", "owner": "nick", "admins": [], "members": [] } }
+# Временная БД
 rooms_db = {
     "Общий чат": {"type": "group", "owner": "system", "admins": [], "members": []}
 }
@@ -30,16 +29,18 @@ def on_join(data):
     if room in rooms_db:
         if nick not in rooms_db[room]['members']:
             rooms_db[room]['members'].append(nick)
-        # Отправляем историю и инфо о комнате
+        
+        # Отправляем историю только вошедшему
         room_msgs = [m for m in messages_history if m.get('room') == room]
         emit('history', room_msgs)
-        emit('room_info', rooms_db[room])
+        
+        # РАССЫЛКА ВСЕМ В ЧАТЕ: обновите список участников
+        emit('room_info', rooms_db[room], to=room)
 
 @socketio.on('message')
 def handle_message(data):
     data['id'] = str(int(time.time() * 1000))
     messages_history.append(data)
-    if len(messages_history) > 500: messages_history.pop(0)
     emit('render_message', data, to=data.get('room'))
 
 @socketio.on('create_room')
@@ -52,7 +53,8 @@ def create_room(data):
             "admins": [],
             "members": [data['user']]
         }
-        emit('room_created', {"name": name, "type": data['type']}, broadcast=True)
+        # Рассылаем всем информацию о новом чате
+        emit('room_created', {"name": name}, broadcast=True)
 
 @socketio.on('make_admin')
 def make_admin(data):

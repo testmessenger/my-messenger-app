@@ -5,6 +5,7 @@ import os, time
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit, join_room
 from pymongo import MongoClient
+from bson import ObjectId # Добавили импорт для обработки ID
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=20 * 1024 * 1024)
@@ -31,7 +32,9 @@ def login(data):
     user = users_col.find_one({"nick": nick})
     if user:
         if user['password'] == password:
-            emit('login_success', {"name": user['name'], "nick": nick, "avatar": user.get('avatar', '')})
+            # Убираем ObjectId перед отправкой
+            user_data = {"name": user['name'], "nick": nick, "avatar": user.get('avatar', '')}
+            emit('login_success', user_data)
         else:
             emit('login_error', "Неверный пароль!")
     else:
@@ -40,34 +43,58 @@ def login(data):
 
 @socketio.on('get_rooms')
 def get_rooms():
-    # Отдаем все существующие комнаты (группы/каналы)
-    rooms = list(rooms_col.find({}, {"_id": 0}))
+    # Находим все комнаты и превращаем их в список, убирая _id
+    rooms = []
+    for r in rooms_col.find({}):
+        r.pop('_id', None) # Удаляем несериализуемый ID
+        rooms.append(r)
     emit('load_rooms', rooms)
 
 @socketio.on('create_room')
 def create_r(data):
     if not rooms_col.find_one({"id": data['id']}):
         rooms_col.insert_one(data)
-        emit('room_created', data, broadcast=True)
+        # Копируем данные и удаляем _id перед вещанием
+        broadcast_data = data.copy()
+        broadcast_data.pop('_id', None)
+        emit('room_created', broadcast_data, broadcast=True)
 
 @socketio.on('search')
 def search(data):
     q = data['query'].lower().strip()
     if not q: return
-    users = list(users_col.find({"nick": {"$regex": q}}, {"_id":0, "password":0}))
-    rooms = list(rooms_col.find({"name": {"$regex": q, "$options": "i"}}, {"_id":0}))
+    
+    # Ищем пользователей
+    users = []
+    for u in users_col.find({"nick": {"$regex": q}}):
+        users.append({"nick": u['nick'], "name": u['name'], "avatar": u.get('avatar', '')})
+        
+    # Ищем комнаты
+    rooms = []
+    for r in rooms_col.find({"name": {"$regex": q, "$options": "i"}}):
+        r.pop('_id', None)
+        rooms.append(r)
+        
     emit('search_results', {"users": users, "rooms": rooms})
 
 @socketio.on('message')
 def handle_msg(data):
+    # Сохраняем в базу
     messages_col.insert_one(data)
+    # ПЕРЕД ОТПРАВКОЙ удаляем _id, который добавила MongoDB
+    data.pop('_id', None)
     emit('render_message', data, to=data['room'])
 
 @socketio.on('join')
 def on_join(data):
-    join_room(data['room'])
-    h = list(messages_col.find({"room": data['room']}).sort("_id", -1).limit(50))
-    emit('history', [ {k:v for k,v in m.items() if k != '_id'} for m in h[::-1] ])
+    room = data['room']
+    join_room(room)
+    # Загружаем историю, превращая каждый объект в чистый словарь без _id
+    h = []
+    for m in messages_col.find({"room": room}).sort("_id", -1).limit(50):
+        m.pop('_id', None)
+        h.append(m)
+    emit('history', h[::-1])
 
 @socketio.on('update_profile_image')
 def update_img(data):

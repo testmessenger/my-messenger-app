@@ -3,83 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiteGram Ultra Elite</title>
+    <title>LiteGram Ultra</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
         :root { --bg: #0e1621; --surface: #17212b; --primary: #2481cc; --text: #fff; --online: #4ade80; }
-        body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; overflow: hidden; }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; overflow: hidden; }
         
         #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .input-ui { background: var(--surface); border: 1px solid #333; color: white; padding: 12px; border-radius: 8px; margin: 5px; width: 280px; outline: none; }
+        .input-ui { background: var(--surface); border: 1px solid #333; color: white; padding: 12px; border-radius: 8px; margin: 5px; width: 280px; }
 
-        /* Сетка видео звонка */
+        /* Видео */
         #video-grid { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; padding: 20px; }
         .video-container { position: relative; background: #222; border-radius: 15px; overflow: hidden; aspect-ratio: 16/9; }
-        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        .video-label { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 4px; font-size: 12px; }
-        
-        .call-controls { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: none; gap: 20px; z-index: 5001; }
-        .call-btn { width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .call-controls { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: none; z-index: 5001; }
 
         /* Интерфейс */
         #main-ui { display: flex; height: 100vh; }
         #sidebar { width: 300px; background: var(--surface); border-right: 1px solid #000; display: flex; flex-direction: column; }
-        #chat { flex: 1; display: flex; flex-direction: column; background: #080e15; position: relative; }
+        #chat { flex: 1; display: flex; flex-direction: column; background: #080e15; }
         
-        .header { padding: 15px; background: var(--surface); border-bottom: 1px solid #000; display: flex; align-items: center; gap: 15px; }
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .header { padding: 15px; background: var(--surface); border-bottom: 1px solid #000; display: flex; align-items: center; justify-content: space-between; }
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
         
-        .msg { display: flex; gap: 10px; max-width: 80%; position: relative; }
-        .msg-content { background: var(--surface); padding: 10px; border-radius: 12px; position: relative; min-width: 60px; }
+        .msg { display: flex; gap: 10px; max-width: 85%; position: relative; }
+        .msg-content { background: var(--surface); padding: 10px; border-radius: 12px; min-width: 60px; }
         .my-msg { align-self: flex-end; flex-direction: row-reverse; }
         .my-msg .msg-content { background: var(--primary); }
 
-        .reactions { display: flex; gap: 5px; margin-top: 5px; }
-        .react { background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 8px; font-size: 12px; cursor: pointer; border: 1px solid transparent; }
-        .react.active { border-color: white; }
-
-        .avatar { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; background: #333; cursor: pointer; }
+        .avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: #333; cursor: pointer; }
         .controls { padding: 15px; background: var(--surface); display: flex; gap: 10px; align-items: center; }
         input#msg-input { flex: 1; background: #080e15; border: none; color: white; padding: 12px; border-radius: 10px; outline: none; }
         
-        .tools { position: absolute; top: -20px; right: 0; display: none; gap: 8px; background: #222; padding: 4px; border-radius: 5px; z-index: 10; }
+        .tools { position: absolute; top: -20px; right: 0; display: none; gap: 8px; background: #222; padding: 4px; border-radius: 5px; }
         .msg:hover .tools { display: flex; }
+        .react { cursor: pointer; font-size: 12px; background: rgba(0,0,0,0.2); padding: 2px 5px; border-radius: 5px; margin-right: 3px; }
+        .react.active { border: 1px solid #fff; }
+
+        /* Голосовое сообщение */
+        .voice-rec { color: #ff4d4d; font-weight: bold; animation: blink 1s infinite; }
+        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
     </style>
 </head>
 <body>
 
     <div id="auth-screen">
         <h1 style="color:var(--primary)">LiteGram Ultra</h1>
-        <input type="text" id="r-name" class="input-ui" placeholder="Ваше имя">
+        <input type="text" id="r-name" class="input-ui" placeholder="Имя">
         <input type="text" id="r-user" class="input-ui" placeholder="@username">
         <input type="password" id="r-pass" class="input-ui" placeholder="Пароль">
-        <button onclick="login()" style="background:var(--primary); color:white; border:none; padding:12px 100px; border-radius:8px; cursor:pointer; font-weight:bold;">ВОЙТИ</button>
+        <button onclick="login()" style="background:var(--primary); color:white; border:none; padding:12px 100px; border-radius:8px; cursor:pointer;">ВОЙТИ</button>
     </div>
 
     <div id="video-grid"></div>
     <div class="call-controls" id="call-ui">
-        <button class="call-btn" onclick="leaveCall()" style="background:#ff4d4d">📞</button>
+        <button onclick="leaveCall()" style="background:#ff4d4d; border:none; color:white; width:60px; height:60px; border-radius:50%; font-size:24px; cursor:pointer;">📞</button>
     </div>
 
     <div id="main-ui" style="display:none">
         <div id="sidebar">
             <div class="header">
-                <img id="my-avatar" class="avatar" onclick="changeAv()" title="Нажми, чтобы сменить фото">
-                <b id="my-name-display">Загрузка...</b>
+                <img id="my-avatar" class="avatar" onclick="changeAv()">
+                <b id="my-name-display"></b>
             </div>
-            <div style="padding:15px; background: #242f3d; font-weight: bold;">💬 Общий чат</div>
-            <div style="flex:1; padding:15px; font-size:12px; color:#aaa;">Другие чаты скоро появятся...</div>
-            <button onclick="logout()" style="background:none; border:none; color:#ff4d4d; padding:15px; cursor:pointer; text-align:left;">Выйти из аккаунта</button>
+            <div style="padding:15px; background: #242f3d;">💬 Общий чат</div>
+            <button onclick="logout()" style="margin-top:auto; background:none; border:none; color:#ff4d4d; padding:20px; cursor:pointer; text-align:left;">Выйти</button>
         </div>
         <div id="chat">
-            <div class="header" style="justify-content: space-between;">
-                <b>🌐 Общий чат</b>
-                <button onclick="startCall()" style="background:var(--primary); border:none; color:white; padding:8px 15px; border-radius:5px; cursor:pointer; font-weight:bold;">🎥 Видеозвонок</button>
+            <div class="header">
+                <div>
+                    <b>Общий чат</b>
+                    <div id="typing-status" style="font-size:11px; color:var(--online); height:12px;"></div>
+                </div>
+                <button onclick="startCall()" style="background:var(--primary); border:none; color:white; padding:8px 15px; border-radius:5px; cursor:pointer;">🎥 Звонок</button>
             </div>
             <div id="messages"></div>
             <div class="controls">
-                <input type="text" id="msg-input" placeholder="Напишите сообщение..." onkeypress="if(event.key==='Enter') send()">
-                <button onclick="send()" style="background:none; border:none; color:var(--primary); font-size:28px; cursor:pointer;">➤</button>
+                <button id="voice-btn" style="background:none; border:none; font-size:24px; cursor:pointer;">🎤</button>
+                <input type="text" id="msg-input" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') send()">
+                <button onclick="send()" style="background:none; border:none; color:var(--primary); font-size:24px; cursor:pointer;">➤</button>
             </div>
         </div>
     </div>
@@ -88,29 +90,19 @@
 
     <script>
         const socket = io();
-        let me = null, currentRoom = "global", myStream = null, peers = {};
+        let me = null, currentRoom = "global", myStream, peers = {}, mediaRecorder, audioChunks = [];
 
-        // ПРОВЕРКА СОХРАНЕННОЙ СЕССИИ
         window.onload = () => {
             const saved = localStorage.getItem('litegram_user');
-            if(saved) {
-                me = JSON.parse(saved);
-                enterApp(me);
-            }
+            if(saved) { me = JSON.parse(saved); enterApp(me); }
         };
 
         function login() {
-            const n = document.getElementById('r-name').value, 
-                  u = document.getElementById('r-user').value.toLowerCase(), 
-                  p = document.getElementById('r-pass').value;
+            const n = document.getElementById('r-name').value, u = document.getElementById('r-user').value.toLowerCase(), p = document.getElementById('r-pass').value;
             if(n && u && p) socket.emit('login_attempt', {name:n, nick:u, pass:p});
         }
 
-        socket.on('login_success', u => {
-            me = u;
-            localStorage.setItem('litegram_user', JSON.stringify(u));
-            enterApp(u);
-        });
+        socket.on('login_success', u => { me = u; localStorage.setItem('litegram_user', JSON.stringify(u)); enterApp(u); });
 
         function enterApp(u) {
             document.getElementById('auth-screen').style.display = 'none';
@@ -118,26 +110,56 @@
             document.getElementById('my-avatar').src = u.avatar || 'https://www.w3schools.com/howto/img_avatar.png';
             document.getElementById('my-name-display').innerText = u.name;
             socket.emit('join', {room: currentRoom});
-            setInterval(() => socket.emit('update_status', {nick: me.nick}), 5000);
         }
 
-        function logout() {
-            localStorage.removeItem('litegram_user');
-            location.reload();
-        }
+        function logout() { localStorage.removeItem('litegram_user'); location.reload(); }
 
         function send() {
             const i = document.getElementById('msg-input');
-            if(i.value.trim()) { 
-                socket.emit('message', {user: me.name, nick: '@'+me.nick, text: i.value, room: currentRoom}); 
-                i.value = ''; 
+            if(i.value.trim()) {
+                socket.emit('message', {user:me.name, nick:'@'+me.nick, text:i.value, room:currentRoom, type:'text'});
+                i.value = '';
             }
         }
+
+        // ПЕЧАТАНИЕ
+        let tTime;
+        document.getElementById('msg-input').oninput = () => {
+            socket.emit('typing', {nick: me.nick, room: currentRoom, is_typing: true});
+            clearTimeout(tTime);
+            tTime = setTimeout(() => socket.emit('typing', {nick: me.nick, room: currentRoom, is_typing: false}), 2000);
+        };
+        socket.on('user_typing', d => {
+            document.getElementById('typing-status').innerText = d.is_typing ? d.nick + ' печатает...' : '';
+        });
+
+        // ГОЛОСОВЫЕ (Web Audio API)
+        const vBtn = document.getElementById('voice-btn');
+        vBtn.onmousedown = async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(audioChunks, {type:'audio/ogg'});
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = () => {
+                    socket.emit('message', {user:me.name, nick:'@'+me.nick, audio:reader.result, room:currentRoom, type:'audio'});
+                };
+            };
+            mediaRecorder.start();
+            vBtn.style.color = 'red';
+        };
+        vBtn.onmouseup = () => { if(mediaRecorder) mediaRecorder.stop(); vBtn.style.color = 'white'; };
 
         function addMsg(d) {
             const m = document.getElementById('messages'), isMy = d.nick === '@' + me.nick;
             if(!isMy) document.getElementById('notif').play();
             
+            let body = d.text;
+            if(d.type === 'audio') body = `<audio src="${d.audio}" controls style="height:30px; width:200px;"></audio>`;
+
             const html = `
                 <div class="msg ${isMy ? 'my-msg' : ''}" id="msg-${d._id}">
                     <img class="avatar" src="${d.avatar || 'https://www.w3schools.com/howto/img_avatar.png'}">
@@ -145,12 +167,11 @@
                         <div class="tools">
                             <span onclick="react('${d._id}', '❤️')">❤️</span>
                             <span onclick="react('${d._id}', '👍')">👍</span>
-                            <span onclick="react('${d._id}', '🔥')">🔥</span>
                             ${isMy ? `<span onclick="del('${d._id}')">🗑</span>` : ''}
                         </div>
-                        <b style="font-size:11px; opacity:0.6">${d.user}</b><br>
-                        <span>${d.text}</span>
-                        <div class="reactions" id="re-${d._id}"></div>
+                        <b style="font-size:10px; opacity:0.5">${d.user}</b><br>
+                        ${body}
+                        <div class="react-area" id="re-${d._id}"></div>
                     </div>
                 </div>`;
             m.insertAdjacentHTML('beforeend', html);
@@ -162,54 +183,40 @@
         socket.on('update_reactions', d => updateR(d.msg_id, d.reactions));
         function updateR(id, rs) {
             const el = document.getElementById(`re-${id}`); if(!el) return;
-            el.innerHTML = Object.entries(rs).map(([e, us]) => `
-                <span class="react ${us.includes(me.nick)?'active':''}" onclick="react('${id}','${e}')">${e} ${us.length}</span>
-            `).join('');
+            el.innerHTML = Object.entries(rs).map(([e, us]) => `<span class="react ${us.includes(me.nick)?'active':''}" onclick="react('${id}','${e}')">${e} ${us.length}</span>`).join('');
         }
 
-        function del(id) { if(confirm("Удалить сообщение?")) socket.emit('delete_msg_global', {msg_id:id, room:currentRoom}); }
+        function del(id) { if(confirm("Удалить?")) socket.emit('delete_msg_global', {msg_id:id, room:currentRoom}); }
         socket.on('msg_deleted_confirm', d => document.getElementById(`msg-${d.msg_id}`)?.remove());
         socket.on('render_message', addMsg);
         socket.on('history', ms => ms.forEach(addMsg));
 
-        // ИСПРАВЛЕННЫЕ ВИДЕОЗВОНКИ (БЕЗ ВЫЛЕТА)
+        // ЗВОНКИ
         async function startCall() {
             document.getElementById('video-grid').style.display = 'grid';
             document.getElementById('call-ui').style.display = 'flex';
-            try {
-                myStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-                addV('my-v', myStream, "Вы (Я)");
-                socket.emit('join_call', {room: currentRoom, nick: me.nick});
-            } catch(e) { alert("Ошибка доступа к камере!"); leaveCall(); }
+            myStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+            addV('my-v', myStream, "Вы");
+            socket.emit('join_call', {room: currentRoom, nick: me.nick});
         }
-
         function addV(id, s, n) {
             if(document.getElementById(id)) return;
             const div = document.createElement('div'); div.className='video-container'; div.id=id;
-            const v = document.createElement('video'); v.srcObject=s; v.autoplay=true; v.setAttribute('playsinline', '');
-            if(id==='my-v') v.muted=true;
-            div.innerHTML += `<div class="video-label">${n}</div>`; div.appendChild(v);
+            const v = document.createElement('video'); v.srcObject=s; v.autoplay=true; if(id==='my-v') v.muted=true;
+            div.innerHTML = `<div class="video-label">${n}</div>`; div.appendChild(v);
             document.getElementById('video-grid').appendChild(div);
         }
-
-        function leaveCall() {
+        function leaveCall() { 
             if(myStream) myStream.getTracks().forEach(t => t.stop());
-            document.getElementById('video-grid').style.display = 'none';
-            document.getElementById('call-ui').style.display = 'none';
-            document.getElementById('video-grid').innerHTML = '';
-            Object.values(peers).forEach(p => p.close());
-            peers = {};
-            // НИКАКОГО location.reload() ТУТ НЕТ!
+            document.getElementById('video-grid').style.display='none';
+            document.getElementById('video-grid').innerHTML='';
+            document.getElementById('call-ui').style.display='none';
         }
-
         function changeAv() {
-            const url = prompt("Вставь прямую ссылку на фото (URL):");
-            if(url) {
-                socket.emit('update_avatar', {nick: me.nick, avatar: url});
-                document.getElementById('my-avatar').src = url;
-                let user = JSON.parse(localStorage.getItem('litegram_user'));
-                user.avatar = url;
-                localStorage.setItem('litegram_user', JSON.stringify(user));
+            const url = prompt("Ссылка на аватар:");
+            if(url) { 
+                socket.emit('update_avatar', {nick: me.nick, avatar: url}); 
+                document.getElementById('my-avatar').src = url; 
             }
         }
     </script>

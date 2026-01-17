@@ -7,7 +7,7 @@
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
         :root { --bg: #0e1621; --surf: #17212b; --accent: #2481cc; --text: #fff; --msg-my: #2b5278; --msg-other: #182533; --border: #000; }
-        * { box-sizing: border-box; font-family: -apple-system, sans-serif; }
+        * { box-sizing: border-box; font-family: sans-serif; }
         body { background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
 
         /* Sidebar */
@@ -15,59 +15,61 @@
         .chat-item { padding: 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-radius: 10px; margin: 2px 8px; transition: 0.2s; }
         .chat-item:hover, .chat-item.active { background: var(--accent); }
 
-        /* Messages */
+        /* Chat */
         #chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
         #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .msg { max-width: 75%; padding: 10px; border-radius: 15px; position: relative; group; }
+        
+        /* Bubbles */
+        .msg { max-width: 75%; padding: 10px; border-radius: 15px; position: relative; }
         .msg.my { align-self: flex-end; background: var(--msg-my); border-bottom-right-radius: 2px; }
         .msg.other { align-self: flex-start; background: var(--msg-other); border-bottom-left-radius: 2px; }
 
-        /* Delete Button */
-        .del-btn { position: absolute; top: -10px; right: -10px; background: #ff4d4d; color: white; border: none; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10; }
+        /* Actions */
+        .del-btn { position: absolute; top: -10px; right: -10px; background: #ff4d4d; color: white; border: none; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10; }
         .msg.my:hover .del-btn { display: flex; }
-
-        /* Reactions */
         .react-bar { display: flex; gap: 8px; margin-top: 5px; }
-        .react-btn { cursor: pointer; font-size: 14px; opacity: 0.6; transition: 0.2s; }
+        .react-btn { cursor: pointer; opacity: 0.6; transition: 0.2s; font-size: 14px; }
         .react-btn:hover { opacity: 1; transform: scale(1.2); }
-        .msg-reactions { display: flex; gap: 5px; background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; width: fit-content; margin-top: 5px; font-size: 12px; }
+        .msg-reactions { display: flex; gap: 5px; background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; width: fit-content; margin-top: 5px; font-size: 11px; }
 
-        /* Call Overlay */
-        #call-ui { position: fixed; inset: 0; background: rgba(14, 22, 33, 0.95); z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; }
-        .call-anim { width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--accent); animation: pulse 1.5s infinite; margin-bottom: 20px; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(36,129,204,0.7); } 100% { box-shadow: 0 0 0 30px rgba(36,129,204,0); } }
-
-        /* Panels */
-        #sticker-panel { display: none; position: absolute; bottom: 80px; left: 15px; background: var(--surf); border: 1px solid var(--border); padding: 10px; border-radius: 15px; grid-template-columns: repeat(4, 1fr); gap: 10px; z-index: 100; }
+        /* Media */
+        .file-box { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; display: flex; align-items: center; gap: 10px; text-decoration: none; color: white; border: 1px dashed rgba(255,255,255,0.2); }
         .video-note { width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); }
         #v-preview { position: absolute; bottom: 85px; right: 20px; width: 130px; height: 130px; border-radius: 50%; border: 3px solid #ff4d4d; display: none; object-fit: cover; transform: scaleX(-1); }
+        
+        /* UI Elements */
+        #call-ui { position: fixed; inset: 0; background: rgba(14,22,33,0.98); z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; }
+        .call-anim { width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--accent); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(36,129,204,0.7); } 100% { box-shadow: 0 0 0 30px rgba(36,129,204,0); } }
 
+        #sticker-panel { display: none; position: absolute; bottom: 80px; left: 15px; background: var(--surf); border: 1px solid var(--border); padding: 10px; border-radius: 15px; grid-template-columns: repeat(4, 1fr); gap: 10px; z-index: 100; }
         .btn-icon { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: #808b99; cursor: pointer; font-size: 20px; }
         .btn-icon:hover { background: rgba(255,255,255,0.1); color: #fff; }
         .avatar { width: 40px; height: 40px; border-radius: 50%; }
+        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
 
     <div id="call-ui">
-        <div class="call-anim"></div>
+        <div class="call-anim" style="margin-bottom:20px"></div>
         <h2 id="call-target">Вызов...</h2>
-        <button onclick="endCall()" style="background:#ff4d4d; color:white; border:none; padding:15px 40px; border-radius:30px; cursor:pointer;">Завершить</button>
+        <button onclick="endCall()" style="background:#ff4d4d; color:white; border:none; padding:12px 35px; border-radius:20px; cursor:pointer;">Завершить</button>
     </div>
 
     <div id="sidebar">
         <div style="padding:15px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border);">
             <img id="my-av" class="avatar" src="https://via.placeholder.com/40">
-            <b id="my-name" style="flex:1">Загрузка...</b>
+            <b id="my-name-display" style="flex:1">Загрузка...</b>
             <button class="btn-icon" onclick="createGroup()">+</button>
         </div>
-        <div style="padding:10px;"><input id="search-input" placeholder="Поиск чатов..." oninput="filterChats()" style="width:100%; padding:10px; border-radius:10px; background:var(--bg); border:none; color:white;"></div>
+        <div style="padding:10px;"><input id="search-chat" placeholder="Поиск..." oninput="filterList()" style="width:100%; padding:10px; border-radius:10px; background:var(--bg); border:none; color:white;"></div>
         <div id="chats-list" style="flex:1; overflow-y:auto;"></div>
     </div>
 
     <div id="chat-area">
         <video id="v-preview" autoplay muted></video>
-        <div style="background:var(--surf); padding:10px 15px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border);">
+        <div style="background:var(--surf); padding:10px 15px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
             <b id="chat-title">Выберите чат</b>
             <button class="btn-icon" onclick="startCall()">📞</button>
         </div>
@@ -75,13 +77,16 @@
         <div id="messages"></div>
 
         <div id="sticker-panel">
-            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721028.png" style="width:50px; cursor:pointer" onclick="sendSticker(this.src)">
-            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721021.png" style="width:50px; cursor:pointer" onclick="sendSticker(this.src)">
-            <img src="https://cdn-icons-png.flaticon.com/512/2584/2584606.png" style="width:50px; cursor:pointer" onclick="sendSticker(this.src)">
-            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721038.png" style="width:50px; cursor:pointer" onclick="sendSticker(this.src)">
+            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721028.png" style="width:50px; cursor:pointer" onclick="sendMedia(this.src, 'sticker')">
+            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721021.png" style="width:50px; cursor:pointer" onclick="sendMedia(this.src, 'sticker')">
+            <img src="https://cdn-icons-png.flaticon.com/512/2584/2584606.png" style="width:50px; cursor:pointer" onclick="sendMedia(this.src, 'sticker')">
+            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721038.png" style="width:50px; cursor:pointer" onclick="sendMedia(this.src, 'sticker')">
         </div>
 
-        <div style="background:var(--surf); padding:10px 15px; display:flex; align-items:center; gap:10px;">
+        <div style="background:var(--surf); padding:10px 15px; display:flex; align-items:center; gap:8px;">
+            <label class="btn-icon" style="display:flex; align-items:center; justify-content:center; cursor:pointer">
+                📎<input type="file" onchange="uploadFile(this)">
+            </label>
             <button class="btn-icon" onclick="toggleStickers()">😊</button>
             <button id="v-btn" class="btn-icon" onclick="recordMedia('video')">📷</button>
             <input id="msg-in" placeholder="Сообщение..." style="flex:1; background:transparent; border:none; color:white;" onkeypress="if(event.key==='Enter') send()">
@@ -111,34 +116,34 @@
         }
 
         socket.on('login_success', u => {
-            me = u; document.getElementById('my-name').innerText = u.name;
+            me = u; document.getElementById('my-name-display').innerText = u.name;
             socket.emit('get_my_rooms', {nick: me.nick});
             switchRoom('global', '🌍 Общий чат');
         });
 
-        // Поиск
-        function filterChats() {
-            const q = document.getElementById('search-input').value.toLowerCase();
-            document.querySelectorAll('.chat-item').forEach(el => {
-                el.style.display = el.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
-            });
+        // ЗАГРУЗКА ФАЙЛОВ
+        function uploadFile(input) {
+            const file = input.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                socket.emit('message', {
+                    room: currentRoom, nick: me.nick, user: me.name,
+                    file: e.target.result, fileName: file.name, fileType: file.type
+                });
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
         }
 
         // Удаление
         function deleteMsg(id) {
-            if(confirm("Удалить сообщение?")) {
-                socket.emit('delete_message', {msg_id: id, room: currentRoom, nick: me.nick});
-            }
+            if(confirm("Удалить сообщение?")) socket.emit('delete_message', {msg_id: id, room: currentRoom, nick: me.nick});
         }
-        socket.on('remove_message_from_ui', id => {
-            const el = document.getElementById(`msg-${id}`);
-            if(el) el.remove();
-        });
+        socket.on('remove_message_from_ui', id => { const el = document.getElementById(`msg-${id}`); if(el) el.remove(); });
 
         // Реакции
-        function addReact(id, emoji) {
-            socket.emit('add_reaction', {msg_id: id, emoji: emoji, nick: me.nick, room: currentRoom});
-        }
+        function addReact(id, emoji) { socket.emit('add_reaction', {msg_id: id, emoji, nick: me.nick, room: currentRoom}); }
         socket.on('update_reactions', msg => {
             const el = document.getElementById(`msg-${msg.id}`);
             if(el) {
@@ -151,7 +156,15 @@
             }
         });
 
-        // Чат и комнаты
+        // Поиск
+        function filterList() {
+            const q = document.getElementById('search-chat').value.toLowerCase();
+            document.querySelectorAll('.chat-item').forEach(el => {
+                el.style.display = el.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
+            });
+        }
+
+        // Навигация
         function switchRoom(id, title) {
             currentRoom = id;
             document.getElementById('chat-title').innerText = title;
@@ -185,9 +198,9 @@
             }
         }
 
-        function sendSticker(url) {
-            socket.emit('message', {room: currentRoom, sticker: url, nick: me.nick, user: me.name});
-            toggleStickers();
+        function sendMedia(url, type) {
+            socket.emit('message', {room: currentRoom, [type]: url, nick: me.nick, user: me.name});
+            document.getElementById('sticker-panel').style.display = 'none';
         }
 
         socket.on('render_message', d => { if(d.room === currentRoom) addMsg(d); });
@@ -196,9 +209,18 @@
         function addMsg(d) {
             const b = document.getElementById('messages');
             let content = d.text ? `<div>${d.text}</div>` : '';
-            if(d.sticker) content = `<img src="${d.sticker}" style="width:120px;">`;
+            if(d.sticker) content = `<img src="${d.sticker}" style="width:100px;">`;
             if(d.video) content = `<video class="video-note" src="${d.video}" autoplay loop muted></video>`;
             if(d.voice) content = `<audio controls src="${d.voice}" style="width:200px; height:35px;"></audio>`;
+            
+            // Обработка файлов
+            if(d.file) {
+                if(d.fileType.startsWith('image/')) {
+                    content = `<img src="${d.file}" style="max-width:100%; border-radius:8px; cursor:pointer" onclick="window.open(this.src)">`;
+                } else {
+                    content = `<a href="${d.file}" download="${d.fileName}" class="file-box">📄 ${d.fileName}</a>`;
+                }
+            }
 
             const isMy = d.nick === me.nick;
             const html = `
@@ -229,7 +251,7 @@
                 mediaRec.onstop = () => {
                     const blob = new Blob(chunks, {type: mode==='video'?'video/webm':'audio/webm'});
                     const r = new FileReader(); r.readAsDataURL(blob);
-                    r.onloadend = () => socket.emit('message', {room:currentRoom, [mode]:r.result, nick:me.nick, user:me.name});
+                    r.onloadend = () => sendMedia(r.result, mode);
                     stream.getTracks().forEach(t => t.stop());
                     document.getElementById('v-preview').style.display='none';
                 };

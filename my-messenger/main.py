@@ -3,8 +3,10 @@ monkey.patch_all()
 import os, flask, flask_socketio, pymongo
 
 app = flask.Flask(__name__)
+# Буфер 100МБ для файлов и видео
 socketio = flask_socketio.SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=100*1024*1024)
 
+# Твоя база MongoDB
 db = pymongo.MongoClient("mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true", connect=False)['messenger_db']
 
 @app.route('/')
@@ -15,14 +17,15 @@ def login(data):
     nick = data['nick'].replace('@','').lower().strip()
     u = db.users.find_one({"nick": nick})
     if not u: db.users.insert_one({"nick": nick, "password": data['pass'], "name": nick})
-    elif u['password'] != data['pass']: return emit('login_error', "Ошибка")
+    elif u['password'] != data['pass']: return flask_socketio.emit('login_error', "Ошибка")
     flask_socketio.emit('login_success', {"nick": nick})
 
 @socketio.on('message')
 def handle_msg(data):
     r = db.rooms.find_one({"id": data['room']})
-    if r and data['nick'] in r.get('muted', []): return
+    if r and data['nick'] in r.get('muted', []): return # Проверка мута
     data['id'] = os.urandom(4).hex()
+    data['reactions'] = {}
     db.messages.insert_one(data.copy())
     data.pop('_id', None)
     socketio.emit('render_message', data, to=data['room'])
@@ -31,16 +34,22 @@ def handle_msg(data):
 def admin_act(data):
     room = db.rooms.find_one({"id": data['room']})
     if not room: return
-    is_mod = (data['nick'] == room.get('owner')) or (data['nick'] in room.get('admins', []))
+    is_mod = (data['nick'] == room['owner']) or (data['nick'] in room.get('admins', []))
     if is_mod:
-        if data['action'] == 'ban':
-            db.rooms.update_one({"id": data['room']}, {"$pull": {"members": data['target']}, "$push": {"banned": data['target']}})
-            socketio.emit('kick_user', data['target'], to=data['room'])
-        elif data['action'] == 'mute':
-            db.rooms.update_one({"id": data['room']}, {"$addToSet": {"muted": data['target']}})
-        elif data['action'] == 'promote' and data['nick'] == room['owner']:
-            db.rooms.update_one({"id": data['room']}, {"$addToSet": {"admins": data['target']}})
+        t, a = data['target'], data['action']
+        if a == 'ban':
+            db.rooms.update_one({"id": data['room']}, {"$pull": {"members": t}, "$push": {"banned": t}})
+            socketio.emit('kick_user', t, to=data['room'])
+        elif a == 'mute': db.rooms.update_one({"id": data['room']}, {"$addToSet": {"muted": t}})
+        elif a == 'promote' and data['nick'] == room['owner']:
+            db.rooms.update_one({"id": data['room']}, {"$addToSet": {"admins": t}})
     socketio.emit('room_update', db.rooms.find_one({"id": data['room']}, {"_id":0}), to=data['room'])
+
+@socketio.on('add_reaction')
+def add_react(data):
+    db.messages.update_one({"id": data['msg_id']}, {"$set": {f"reactions.{data['nick']}": data['emoji']}})
+    m = db.messages.find_one({"id": data['msg_id']}, {"_id":0})
+    socketio.emit('update_reactions', m, to=data['room'])
 
 @socketio.on('delete_message')
 def del_msg(data):
@@ -63,6 +72,8 @@ def cr_room(data):
 
 @socketio.on('join')
 def on_join(data):
+    r = db.rooms.find_one({"id": data['room']})
+    if r and data['nick'] in r.get('banned', []): return
     flask_socketio.join_room(data['room'])
     h = list(db.messages.find({"room":data['room']}).sort("_id",-1).limit(40))
     for m in h: m.pop('_id', None)

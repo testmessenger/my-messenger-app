@@ -3,42 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiteGram Elite</title>
+    <title>LiteGram Elite+</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
         :root { --bg: #0e1621; --surface: #17212b; --text: #ffffff; --primary: #2481cc; --online: #4ade80; }
         body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
-        /* Авторизация */
         #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .input-ui { background: var(--surface); border: 1px solid #333; color: white; padding: 12px; border-radius: 8px; margin: 5px; width: 260px; outline: none; }
-
-        /* Профиль */
-        .avatar-circle { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #333; cursor: pointer; }
-        #profile-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--surface); padding: 30px; border-radius: 15px; z-index: 3000; display: none; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .input-ui { background: var(--surface); border: 1px solid #333; color: white; padding: 12px; border-radius: 8px; margin: 5px; width: 260px; }
 
         #sidebar { width: 300px; background: var(--surface); border-right: 1px solid #000; display: flex; flex-direction: column; }
         #chat-window { flex: 1; display: flex; flex-direction: column; background: #080e15; }
         
         .header { background: var(--surface); padding: 10px 15px; border-bottom: 1px solid #000; display: flex; align-items: center; gap: 12px; }
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
         
-        /* Сообщения */
-        .msg { display: flex; gap: 10px; max-width: 75%; position: relative; }
-        .msg-content { background: var(--surface); padding: 10px 14px; border-radius: 15px; position: relative; }
+        /* Сообщения и Реакции */
+        .msg { display: flex; gap: 10px; max-width: 80%; position: relative; margin-bottom: 10px; }
+        .msg-content { background: var(--surface); padding: 10px; border-radius: 15px; position: relative; min-width: 60px; }
         .my-msg { align-self: flex-end; flex-direction: row-reverse; }
         .my-msg .msg-content { background: var(--primary); }
         
-        .video-circle { width: 220px; height: 220px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
-        .delete-overlay { position: absolute; top: 0; right: 0; cursor: pointer; font-size: 12px; display: none; background: rgba(255,0,0,0.7); border-radius: 50%; width: 18px; height: 18px; text-align: center; }
-        .msg:hover .delete-overlay { display: block; }
+        .reactions-bar { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+        .reaction { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 2px 6px; font-size: 12px; cursor: pointer; border: 1px solid transparent; }
+        .reaction.active { border-color: var(--primary); background: rgba(36, 129, 204, 0.3); }
 
-        .controls { background: var(--surface); padding: 10px; display: flex; gap: 10px; align-items: center; }
-        .rec-btn { cursor: pointer; font-size: 22px; background: none; border: none; color: var(--text); }
-        .rec-active { color: #ff4d4d; animation: blink 0.8s infinite; }
-        @keyframes blink { 50% { opacity: 0.4; } }
+        .emoji-picker { position: absolute; bottom: 70px; left: 50px; background: var(--surface); border: 1px solid #333; padding: 10px; display: none; grid-template-columns: repeat(5, 1fr); gap: 5px; border-radius: 10px; z-index: 100; }
+        .emoji-btn { cursor: pointer; font-size: 20px; transition: 0.2s; }
+        .emoji-btn:hover { transform: scale(1.3); }
+
+        .avatar-circle { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; }
+        .controls { background: var(--surface); padding: 10px; display: flex; gap: 10px; align-items: center; position: relative; }
         
-        #video-preview { position: fixed; bottom: 80px; right: 20px; width: 160px; height: 160px; border-radius: 50%; object-fit: cover; display: none; transform: scaleX(-1); border: 3px solid var(--primary); }
+        .msg-tools { position: absolute; top: -20px; right: 10px; display: none; gap: 10px; background: #222; padding: 2px 8px; border-radius: 5px; font-size: 12px; }
+        .msg:hover .msg-tools { display: flex; }
     </style>
 </head>
 <body>
@@ -48,46 +46,40 @@
         <input type="text" id="r-name" class="input-ui" placeholder="Имя">
         <input type="text" id="r-user" class="input-ui" placeholder="@username">
         <input type="password" id="r-pass" class="input-ui" placeholder="Пароль">
-        <button onclick="login()" style="background: var(--primary); color: white; border: none; padding: 12px 100px; border-radius: 8px; cursor: pointer;">ВОЙТИ</button>
-    </div>
-
-    <div id="profile-modal">
-        <h3>Ваш профиль</h3>
-        <img id="my-avatar-big" class="avatar-circle" style="width:100px; height:100px; margin-bottom:15px;">
-        <br>
-        <input type="file" id="avatar-input" style="display:none" onchange="uploadAvatar(this)">
-        <button onclick="document.getElementById('avatar-input').click()" style="background:var(--primary); color:white; border:none; padding:8px 15px; border-radius:5px;">Сменить фото</button>
-        <button onclick="document.getElementById('profile-modal').style.display='none'" style="margin-top:20px; display:block; width:100%; background:none; color:white; border:1px solid #555;">Закрыть</button>
+        <button onclick="login()" style="background:var(--primary); color:white; border:none; padding:12px 80px; border-radius:8px; cursor:pointer;">ВОЙТИ</button>
     </div>
 
     <div id="main-container" style="display:none; width: 100%;">
         <div id="sidebar">
-            <div class="header">
-                <img id="my-avatar-mini" class="avatar-circle" onclick="document.getElementById('profile-modal').style.display='block'">
-                <input type="text" id="user-search" placeholder="Поиск..." style="flex:1; background:#080e15; border:none; color:white; padding:8px; border-radius:8px;">
-                <button onclick="searchUser()" style="background:none; border:none; color:white;">🔍</button>
-            </div>
+            <div class="header"><b>Чаты</b></div>
             <div id="list-items" style="flex:1; overflow-y:auto;"></div>
         </div>
 
         <div id="chat-window">
-            <div class="header">
-                <div><b id="chat-title">Выберите чат</b><br><small id="user-status"></small></div>
-            </div>
+            <div class="header"><b id="chat-title">Общий чат</b></div>
             <div id="messages"></div>
-            <video id="video-preview" autoplay muted></video>
+            
+            <div class="emoji-picker" id="picker">
+                <span class="emoji-btn" onclick="addEmoji('👍')">👍</span>
+                <span class="emoji-btn" onclick="addEmoji('❤️')">❤️</span>
+                <span class="emoji-btn" onclick="addEmoji('😂')">😂</span>
+                <span class="emoji-btn" onclick="addEmoji('🔥')">🔥</span>
+                <span class="emoji-btn" onclick="addEmoji('😮')">😮</span>
+            </div>
+
             <div class="controls">
-                <button class="rec-btn" onmousedown="startRec('audio')" onmouseup="stopRec()">🎤</button>
-                <button class="rec-btn" onmousedown="startRec('video')" onmouseup="stopRec()">📷</button>
+                <button onclick="document.getElementById('picker').style.display='grid'" style="background:none; border:none; font-size:20px; cursor:pointer;">😊</button>
                 <input type="text" id="msg-input" placeholder="Сообщение..." style="flex:1; background:#080e15; color:white; border:none; padding:12px; border-radius:10px;">
-                <button onclick="send()" style="background:none; border:none; color:var(--primary); font-size:26px;">➤</button>
+                <button onclick="send()" style="background:none; border:none; color:var(--primary); font-size:26px; cursor:pointer;">➤</button>
             </div>
         </div>
     </div>
 
+    <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
+
     <script>
         const socket = io();
-        let me = null, currentRoom = "Общий чат", chatList = ["Общий чат"], mediaRec, chunks = [];
+        let me = null, currentRoom = "Общий чат";
 
         function login() {
             const n = document.getElementById('r-name').value, u = document.getElementById('r-user').value.toLowerCase(), p = document.getElementById('r-pass').value;
@@ -97,91 +89,72 @@
         socket.on('login_success', u => {
             me = u; document.getElementById('auth-screen').style.display = 'none';
             document.getElementById('main-container').style.display = 'flex';
-            document.getElementById('my-avatar-mini').src = u.avatar || 'https://www.w3schools.com/howto/img_avatar.png';
-            document.getElementById('my-avatar-big').src = u.avatar || 'https://www.w3schools.com/howto/img_avatar.png';
             switchRoom(currentRoom);
             setInterval(() => socket.emit('update_status', {nick: me.nick}), 5000);
         });
-
-        function uploadAvatar(input) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const base64 = e.target.result;
-                socket.emit('update_avatar', {nick: me.nick, avatar: base64});
-                document.getElementById('my-avatar-mini').src = base64;
-                document.getElementById('my-avatar-big').src = base64;
-            };
-            reader.readAsDataURL(input.files[0]);
-        }
 
         function switchRoom(n) {
             currentRoom = n; document.getElementById('chat-title').innerText = n;
             document.getElementById('messages').innerHTML = ""; 
             socket.emit('join', {room: n, nick: me.nick});
-            if(!chatList.includes(n)) chatList.push(n); renderList();
         }
-
-        function renderList() {
-            document.getElementById('list-items').innerHTML = chatList.map(r => `<div class="chat-item" onclick="switchRoom('${r}')" style="padding:15px; cursor:pointer; border-bottom:1px solid #000;">${r}</div>`).join('');
-        }
-
-        async function startRec(type) {
-            chunks = [];
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
-            if(type === 'video') { document.getElementById('video-preview').style.display = 'block'; document.getElementById('video-preview').srcObject = stream; }
-            mediaRec = new MediaRecorder(stream);
-            mediaRec.ondataavailable = e => chunks.push(e.data);
-            mediaRec.onstop = () => {
-                const blob = new Blob(chunks, { type: type === 'video' ? 'video/webm' : 'audio/webm' });
-                const reader = new FileReader();
-                reader.onload = () => socket.emit('message', { user: me.name, nick: '@'+me.nick, room: currentRoom, file: reader.result, file_type: blob.type });
-                reader.readAsDataURL(blob);
-                stream.getTracks().forEach(t => t.stop());
-                document.getElementById('video-preview').style.display = 'none';
-            };
-            mediaRec.start();
-        }
-        function stopRec() { mediaRec.stop(); }
 
         function send() {
             const i = document.getElementById('msg-input');
-            if(i.value) { socket.emit('message', {user: me.name, nick: '@'+me.nick, text: i.value, room: currentRoom}); i.value = ''; }
+            if(i.value) { 
+                socket.emit('message', {user: me.name, nick: '@'+me.nick, text: i.value, room: currentRoom}); 
+                i.value = ''; 
+                document.getElementById('picker').style.display='none';
+            }
         }
+
+        function addEmoji(e) { document.getElementById('msg-input').value += e; }
 
         function addMsg(d) {
             const m = document.getElementById('messages'), isMy = d.nick === '@' + me.nick;
-            let content = `<span>${d.text || ''}</span>`;
-            if(d.file) {
-                if(d.file_type.includes('video')) content = `<video src="${d.file}" class="video-circle" controls></video>`;
-                else if(d.file_type.includes('audio')) content = `<audio src="${d.file}" controls></audio>`;
-            }
+            if(!isMy) document.getElementById('notif-sound').play();
+
             const html = `
                 <div class="msg ${isMy ? 'my-msg' : ''}" id="msg-${d._id}">
-                    <img class="avatar-circle" src="${d.avatar || 'https://www.w3schools.com/howto/img_avatar.png'}" style="width:30px; height:30px;">
+                    <img class="avatar-circle" src="${d.avatar || 'https://www.w3schools.com/howto/img_avatar.png'}">
                     <div class="msg-content">
-                        ${isMy ? `<div class="delete-overlay" onclick="deleteGlobal('${d._id}')">×</div>` : ''}
-                        <b style="font-size:11px; color:#aaa;">${d.user}</b><br>${content}
+                        <div class="msg-tools">
+                            <span onclick="react('${d._id}', '👍')">👍</span>
+                            <span onclick="react('${d._id}', '❤️')">❤️</span>
+                            <span onclick="react('${d._id}', '🔥')">🔥</span>
+                            ${isMy ? `<span onclick="deleteMsg('${d._id}')">🗑</span>` : ''}
+                        </div>
+                        <b style="font-size:11px; opacity:0.7;">${d.user}</b><br>
+                        <span>${d.text}</span>
+                        <div class="reactions-bar" id="reacts-${d._id}"></div>
                     </div>
                 </div>`;
             m.insertAdjacentHTML('beforeend', html);
+            if(d.reactions) updateReactsUI(d._id, d.reactions);
             m.scrollTop = m.scrollHeight;
         }
 
-        function deleteGlobal(id) { if(confirm("Удалить у всех?")) socket.emit('delete_msg_global', {msg_id: id, room: currentRoom}); }
+        function react(id, emoji) { socket.emit('add_reaction', {msg_id: id, emoji: emoji, nick: me.nick, room: currentRoom}); }
+        
+        socket.on('update_reactions', d => updateReactsUI(d.msg_id, d.reactions));
+
+        function updateReactsUI(id, reacts) {
+            const container = document.getElementById(`reacts-${id}`);
+            if(!container) return;
+            container.innerHTML = Object.entries(reacts).map(([emoji, users]) => `
+                <span class="reaction ${users.includes(me.nick) ? 'active' : ''}" onclick="react('${id}', '${emoji}')">
+                    ${emoji} ${users.length}
+                </span>
+            `).join('');
+        }
+
+        function deleteMsg(id) { socket.emit('delete_msg_global', {msg_id: id, room: currentRoom}); }
         socket.on('msg_deleted_confirm', d => document.getElementById(`msg-${d.msg_id}`)?.remove());
+
         socket.on('render_message', addMsg);
         socket.on('history', msgs => msgs.forEach(addMsg));
-        
-        function searchUser() { socket.emit('search_user', {query: document.getElementById('user-search').value}); }
-        socket.on('user_found', u => switchRoom([me.nick, u.nick].sort().join('_')));
-        
-        socket.on('status_updated', d => {
-            if(currentRoom.includes(d.nick)) {
-                const online = (Date.now()/1000 - d.last_seen) < 15;
-                document.getElementById('user-status').innerText = online ? "в сети" : "был(а) недавно";
-                document.getElementById('user-status').style.color = online ? "var(--online)" : "#aaa";
-            }
-        });
+
+        function login_error(m) { alert(m); }
     </script>
 </body>
 </html>

@@ -23,52 +23,47 @@ def login(data):
     if user:
         if user['password'] == data['pass']:
             emit('login_success', {"name": user['name'], "nick": nick, "avatar": user.get('avatar', ''), "bio": user.get('bio', '')})
-        else: emit('login_error', "Ошибка пароля")
+        else: emit('login_error', "Ошибка")
     else:
-        new_u = {"nick": nick, "password": data['pass'], "name": nick, "avatar": "", "bio": "", "rank": "Участник"}
+        new_u = {"nick": nick, "password": data['pass'], "name": nick, "avatar": "", "bio": ""}
         users_col.insert_one(new_u)
         emit('login_success', {"name": nick, "nick": nick, "avatar": "", "bio": ""})
-
-@socketio.on('create_room')
-def create_room(data):
-    room_id = "group_" + str(os.urandom(4).hex())
-    new_room = {"id": room_id, "name": data['name'], "members": [data['creator_nick']], "type": "group"}
-    rooms_col.insert_one(new_room)
-    rooms = list(rooms_col.find({"members": data['creator_nick']}, {"_id": 0}))
-    emit('load_rooms', rooms)
-
-@socketio.on('get_my_rooms')
-def get_rooms(data):
-    rooms = list(rooms_col.find({"members": data['nick']}, {"_id": 0}))
-    emit('load_rooms', rooms)
 
 @socketio.on('message')
 def handle_msg(data):
     data['id'] = str(os.urandom(4).hex())
+    data['reactions'] = {} # Инициализация пустых реакций
     messages_col.insert_one(data.copy())
     data.pop('_id', None)
     emit('render_message', data, to=data['room'])
 
-@socketio.on('typing')
-def handle_typing(data):
-    emit('display_typing', data, to=data['room'], include_self=False)
+@socketio.on('add_reaction')
+def add_reaction(data):
+    # data: {msg_id, emoji, nick, room}
+    messages_col.update_one({"id": data['msg_id']}, {"$set": {f"reactions.{data['nick']}": data['emoji']}})
+    msg = messages_col.find_one({"id": data['msg_id']}, {"_id": 0})
+    emit('update_reactions', msg, to=data['room'])
+
+@socketio.on('create_room')
+def create_room(data):
+    room_id = "group_" + str(os.urandom(4).hex())
+    rooms_col.insert_one({"id": room_id, "name": data['name'], "members": [data['creator_nick']], "type": "group"})
+    emit('load_rooms', list(rooms_col.find({"members": data['creator_nick']}, {"_id": 0})))
 
 @socketio.on('join')
 def on_join(data):
     join_room(data['room'])
-    h = list(messages_col.find({"room": data['room']}).sort("_id", -1).limit(50))
+    h = list(messages_col.find({"room": data['room']}).sort("_id", -1).limit(40))
     for m in h: m.pop('_id', None)
     emit('history', h[::-1])
 
-@socketio.on('get_members')
-def get_members(data):
-    m_list = list(users_col.find({}, {"_id":0, "password":0}).limit(100))
-    emit('members_list', m_list)
+@socketio.on('get_my_rooms')
+def get_rooms(data):
+    emit('load_rooms', list(rooms_col.find({"members": data['nick']}, {"_id": 0})))
 
-@socketio.on('get_user_info')
-def get_info(data):
-    u = users_col.find_one({"nick": data['nick']}, {"_id":0, "password":0})
-    if u: emit('user_info_res', u)
+@socketio.on('get_members')
+def get_m(data):
+    emit('members_list', list(users_col.find({}, {"_id":0, "password":0}).limit(50)))
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000)

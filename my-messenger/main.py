@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()
+from gevent import monkey
+monkey.patch_all()
 
 import os, time
 from flask import Flask, render_template
@@ -9,15 +9,15 @@ from bson import ObjectId
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ultra-litegram-2026'
-# Увеличен буфер для передачи длинных голосовых сообщений
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=100 * 1024 * 1024)
 
-# Подключение к MongoDB с защитой от ошибок SSL
+# Подключение к MongoDB
 MONGO_URL = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 client = MongoClient(MONGO_URL)
 db = client['messenger_db']
 users_col = db['users']
 messages_col = db['messages']
+rooms_col = db['rooms'] # Коллекция для групп и каналов
 
 @app.route('/')
 def index():
@@ -36,61 +36,39 @@ def handle_login(data):
         users_col.insert_one(new_user)
         emit('login_success', {"name": data['name'], "nick": nick, "avatar": ""})
 
+@socketio.on('join')
+def on_join(data):
+    room = data['room']
+    join_room(room)
+    # Загружаем историю конкретной комнаты
+    history = list(messages_col.find({"room": room}).sort("_id", -1).limit(50))
+    for m in history: m['_id'] = str(m['_id'])
+    emit('history', history[::-1])
+
 @socketio.on('message')
 def handle_message(data):
     data['time'] = time.time()
-    data['reactions'] = {}
     user = users_col.find_one({"nick": data['nick'].replace('@','')})
     data['avatar'] = user.get('avatar', '') if user else ''
     res = messages_col.insert_one(data.copy())
     data['_id'] = str(res.inserted_id)
     emit('render_message', data, to=data['room'])
 
+@socketio.on('create_room')
+def create_room(data):
+    # data = {name, type, creator}
+    room_id = data['name'].lower().replace(' ', '_')
+    rooms_col.update_one({"id": room_id}, {"$set": data}, upsert=True)
+    emit('room_created', data, broadcast=True)
+
 @socketio.on('typing')
 def handle_typing(data):
     emit('user_typing', data, room=data['room'], include_self=False)
-
-@socketio.on('add_reaction')
-def add_reaction(data):
-    msg_id = data['msg_id']
-    msg = messages_col.find_one({"_id": ObjectId(msg_id)})
-    if msg:
-        reactions = msg.get('reactions', {})
-        emoji = data['emoji']
-        u = data['nick']
-        if emoji in reactions:
-            if u in reactions[emoji]: reactions[emoji].remove(u)
-            else: reactions[emoji].append(u)
-            if not reactions[emoji]: del reactions[emoji]
-        else: reactions[emoji] = [u]
-        messages_col.update_one({"_id": ObjectId(msg_id)}, {"$set": {"reactions": reactions}})
-        emit('update_reactions', {"msg_id": msg_id, "reactions": reactions}, to=data['room'])
-
-@socketio.on('delete_msg_global')
-def delete_msg(data):
-    messages_col.delete_one({"_id": ObjectId(data['msg_id'])})
-    emit('msg_deleted_confirm', data, to=data['room'])
-
-@socketio.on('join')
-def on_join(data):
-    join_room(data['room'])
-    history = list(messages_col.find({"room": data['room']}).sort("_id", -1).limit(50))
-    for m in history: m['_id'] = str(m['_id'])
-    emit('history', history[::-1])
-
-@socketio.on('join_call')
-def handle_join_call(data):
-    room = data['room'] + "_video"
-    join_room(room)
-    emit('user_joined_call', {'nick': data['nick']}, room=room, include_self=False)
-
-@socketio.on('call_signal')
-def handle_call_signal(data):
-    emit('call_signal', {'from': data['from'], 'signal': data['signal']}, room=data['to'])
 
 @socketio.on('update_avatar')
 def update_avatar(data):
     users_col.update_one({"nick": data['nick']}, {"$set": {"avatar": data['avatar']}})
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port)

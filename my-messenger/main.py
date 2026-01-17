@@ -8,7 +8,8 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'litegram-ultra-secret'
+app.config['SECRET_KEY'] = 'litegram-ultra-elite'
+# Поддержка больших файлов (для длинных голосовых)
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=100 * 1024 * 1024)
 
 # Подключение к MongoDB
@@ -52,6 +53,7 @@ def on_join(data):
 @socketio.on('message')
 def handle_message(data):
     data['time'] = time.time()
+    data['reactions'] = {}
     res = messages_col.insert_one(data.copy())
     data['_id'] = str(res.inserted_id)
     emit('render_message', data, to=data['room'])
@@ -60,6 +62,27 @@ def handle_message(data):
 def create_room(data):
     rooms_col.update_one({"id": data['id']}, {"$set": data}, upsert=True)
     emit('room_created', data, broadcast=True)
+
+@socketio.on('add_reaction')
+def add_reaction(data):
+    msg_id = data['msg_id']
+    emoji = data['emoji']
+    nick = data['nick']
+    msg = messages_col.find_one({"_id": ObjectId(msg_id)})
+    if msg:
+        reactions = msg.get('reactions', {})
+        if emoji not in reactions: reactions[emoji] = []
+        if nick in reactions[emoji]:
+            reactions[emoji].remove(nick)
+            if not reactions[emoji]: del reactions[emoji]
+        else: reactions[emoji].append(nick)
+        messages_col.update_one({"_id": ObjectId(msg_id)}, {"$set": {"reactions": reactions}})
+        emit('update_reactions', {"msg_id": msg_id, "reactions": reactions}, room=data['room'])
+
+@socketio.on('delete_msg_global')
+def delete_msg(data):
+    messages_col.delete_one({"_id": ObjectId(data['msg_id'])})
+    emit('msg_deleted_confirm', {"msg_id": data['msg_id']}, room=data['room'])
 
 @socketio.on('typing')
 def handle_typing(data):

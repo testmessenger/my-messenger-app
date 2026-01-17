@@ -1,81 +1,114 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Messenger</title>
+    <title>Messenger 2.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
-        body { background: #0e1621; color: white; font-family: -apple-system, blinkmacsystemfont, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { background: #182533; padding: 10px 15px; border-radius: 12px; position: relative; max-width: 80%; width: fit-content; animation: fadeIn 0.2s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .msg b { color: #5288c1; font-size: 0.9em; display: block; margin-bottom: 4px; }
-        .msg img, .msg video { max-width: 100%; border-radius: 8px; margin-top: 5px; display: block; }
-        .del-btn { color: #ef5350; font-size: 11px; cursor: pointer; margin-left: 10px; opacity: 0.6; }
-        .del-btn:hover { opacity: 1; }
-        #input-area { background: #17212b; padding: 15px; display: flex; align-items: center; gap: 12px; }
-        input[type="text"] { flex: 1; background: #242f3d; border: none; color: white; padding: 12px; border-radius: 10px; outline: none; }
-        .btn-ui { cursor: pointer; color: #6ab3f3; font-size: 24px; user-select: none; }
+        :root { --bg: #0e1621; --surface: #17212b; --text: white; --primary: #6ab3f3; }
+        .light-mode { --bg: #ffffff; --surface: #f0f0f0; --text: #000000; --primary: #0088cc; }
+        
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; transition: 0.3s; }
+        #auth-screen { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+        input { background: var(--surface); border: 1px solid #333; color: var(--text); padding: 12px; border-radius: 8px; margin: 5px; width: 80%; max-width: 300px; }
+        
+        #main-container { display: none; height: 100vh; flex-direction: column; }
+        #sidebar { background: var(--surface); padding: 15px; border-bottom: 1px solid #333; display: flex; overflow-x: auto; gap: 10px; }
+        .chat-item { background: var(--bg); padding: 8px 15px; border-radius: 20px; border: 1px solid var(--primary); white-space: nowrap; cursor: pointer; }
+        
+        #chat { flex: 1; overflow-y: auto; padding: 15px; }
+        .msg { background: var(--surface); padding: 10px; border-radius: 12px; margin-bottom: 8px; width: fit-content; max-width: 80%; }
+        #input-area { background: var(--surface); padding: 15px; display: flex; gap: 10px; }
     </style>
 </head>
-<body>
-    <div id="chat"></div>
-    <div id="input-area">
-        <label class="btn-ui">📎<input type="file" id="file-input" style="display:none" onchange="uploadFile()"></label>
-        <input type="text" id="text-input" placeholder="Напишите сообщение..." onkeypress="if(event.key==='Enter') sendText()">
-        <div class="btn-ui" onclick="sendText()">➤</div>
+<body class="">
+
+    <div id="auth-screen">
+        <h2>Вход в Messenger</h2>
+        <input type="text" id="reg-name" placeholder="Ваше имя">
+        <input type="text" id="reg-user" placeholder="@username">
+        <input type="password" id="reg-pass" placeholder="Password">
+        <button onclick="login()" style="width: 325px; padding: 10px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px;">Войти</button>
+    </div>
+
+    <div id="main-container">
+        <div id="sidebar">
+            </div>
+        <div id="chat"></div>
+        <div id="input-area">
+            <button onclick="toggleTheme()" class="btn-ui">🌓</button>
+            <button onclick="createRoom()" class="btn-ui">➕</button>
+            <input type="text" id="text-input" style="flex:1" placeholder="Сообщение...">
+            <button onclick="sendText()" style="background:none; border:none; color:var(--primary); font-size: 24px;">➤</button>
+        </div>
     </div>
 
     <script>
         const socket = io();
-        const myName = "User_" + Math.floor(Math.random() * 1000);
+        let currentUser = null;
+        let currentRoom = "Общий чат";
+        let rooms = [];
+
+        function login() {
+            const name = document.getElementById('reg-name').value;
+            const user = document.getElementById('reg-user').value;
+            if(name && user) {
+                currentUser = { name, user };
+                document.getElementById('auth-screen').style.display = 'none';
+                document.getElementById('main-container').style.display = 'flex';
+                socket.emit('join', { room: currentRoom });
+                updateSidebar();
+            }
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+        }
+
+        function createRoom() {
+            const name = prompt("Название группы/канала:");
+            if(name) {
+                socket.emit('create_room', { name: name, type: 'group', user: currentUser.user });
+            }
+        }
+
+        socket.on('room_created', function(data) {
+            rooms.push(data.name);
+            updateSidebar();
+        });
+
+        function updateSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if(rooms.length === 0) {
+                sidebar.innerHTML = "<small style='opacity:0.5'>Чатов пока нет</small>";
+                return;
+            }
+            sidebar.innerHTML = rooms.map(r => `<div class="chat-item" onclick="switchRoom('${r}')">${r}</div>`).join('');
+        }
+
+        function switchRoom(name) {
+            socket.emit('join', { room: name });
+            currentRoom = name;
+            document.getElementById('chat').innerHTML = `<i>--- Вы вошли в ${name} ---</i>`;
+        }
 
         function sendText() {
             const el = document.getElementById('text-input');
-            if(el.value.trim()) {
-                socket.emit('message', { user: myName, type: 'text', content: el.value });
+            if(el.value) {
+                socket.emit('message', { 
+                    user: currentUser.name, 
+                    user_at: currentUser.user, 
+                    text: el.value, 
+                    room: currentRoom 
+                });
                 el.value = '';
             }
         }
 
-        function uploadFile() {
-            const file = document.getElementById('file-input').files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                let type = 'file';
-                if (file.type.startsWith('image/')) type = 'image';
-                else if (file.type.startsWith('video/')) type = 'video';
-                
-                socket.emit('message', {
-                    user: myName,
-                    type: type,
-                    content: e.target.result,
-                    filename: file.name
-                });
-            };
-            reader.readAsDataURL(file);
-        }
-
         socket.on('render_message', function(data) {
             const chat = document.getElementById('chat');
-            let html = `<div class="msg" id="msg-${data.id}"><b>${data.user}</b>`;
-            
-            if (data.type === 'text') html += `<span>${data.content}</span>`;
-            else if (data.type === 'image') html += `<img src="${data.content}">`;
-            else if (data.type === 'video') html += `<video controls src="${data.content}"></video>`;
-            else html += `<a href="${data.content}" download="${data.filename}" style="color:#6ab3f3">📁 ${data.filename}</a>`;
-            
-            html += `<span class="del-btn" onclick="deleteMsg('${data.id}')">Удалить</span></div>`;
-            chat.innerHTML += html;
+            chat.innerHTML += `<div class="msg"><b>${data.user} (${data.user_at})</b><br>${data.text}</div>`;
             chat.scrollTop = chat.scrollHeight;
-        });
-
-        function deleteMsg(id) { socket.emit('delete_msg', id); }
-        socket.on('remove_from_ui', function(id) {
-            const el = document.getElementById('msg-' + id);
-            if(el) el.remove();
         });
     </script>
 </body>

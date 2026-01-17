@@ -3,26 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiteGram Ultra</title>
+    <title>LiteGram Elite</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
-        :root { --bg: #0e1621; --surface: #17212b; --text: #ffffff; --primary: #2481cc; --gray: #808b99; --online: #4ade80; }
-        body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        :root { --bg: #0e1621; --surface: #17212b; --text: #ffffff; --primary: #2481cc; --online: #4ade80; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Авторизация */
         #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .input-ui { background: var(--surface); border: 1px solid var(--gray); color: var(--text); padding: 12px; border-radius: 8px; margin: 8px; width: 280px; }
+        .input-ui { background: var(--surface); border: 1px solid #333; color: white; padding: 12px; border-radius: 8px; margin: 5px; width: 260px; outline: none; }
+
+        /* Профиль */
+        .avatar-circle { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #333; cursor: pointer; }
+        #profile-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--surface); padding: 30px; border-radius: 15px; z-index: 3000; display: none; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+
         #sidebar { width: 300px; background: var(--surface); border-right: 1px solid #000; display: flex; flex-direction: column; }
-        #chat-window { flex: 1; display: flex; flex-direction: column; background: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); }
-        .header { background: var(--surface); padding: 10px 15px; border-bottom: 1px solid #000; display: flex; align-items: center; gap: 10px; }
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { background: var(--surface); padding: 10px; border-radius: 15px; max-width: 70%; position: relative; }
-        .video-msg { width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--gray); }
-        .status-dot.online { background: var(--online); }
-        .controls { background: var(--surface); padding: 15px; display: flex; gap: 10px; align-items: center; }
-        .rec-btn { cursor: pointer; font-size: 20px; background: none; border: none; color: var(--gray); }
-        .rec-active { color: #ff4d4d; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
-        #video-preview { position: fixed; bottom: 80px; right: 20px; width: 150px; border-radius: 50%; display: none; transform: scaleX(-1); }
+        #chat-window { flex: 1; display: flex; flex-direction: column; background: #080e15; }
+        
+        .header { background: var(--surface); padding: 10px 15px; border-bottom: 1px solid #000; display: flex; align-items: center; gap: 12px; }
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        
+        /* Сообщения */
+        .msg { display: flex; gap: 10px; max-width: 75%; position: relative; }
+        .msg-content { background: var(--surface); padding: 10px 14px; border-radius: 15px; position: relative; }
+        .my-msg { align-self: flex-end; flex-direction: row-reverse; }
+        .my-msg .msg-content { background: var(--primary); }
+        
+        .video-circle { width: 220px; height: 220px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
+        .delete-overlay { position: absolute; top: 0; right: 0; cursor: pointer; font-size: 12px; display: none; background: rgba(255,0,0,0.7); border-radius: 50%; width: 18px; height: 18px; text-align: center; }
+        .msg:hover .delete-overlay { display: block; }
+
+        .controls { background: var(--surface); padding: 10px; display: flex; gap: 10px; align-items: center; }
+        .rec-btn { cursor: pointer; font-size: 22px; background: none; border: none; color: var(--text); }
+        .rec-active { color: #ff4d4d; animation: blink 0.8s infinite; }
+        @keyframes blink { 50% { opacity: 0.4; } }
+        
+        #video-preview { position: fixed; bottom: 80px; right: 20px; width: 160px; height: 160px; border-radius: 50%; object-fit: cover; display: none; transform: scaleX(-1); border: 3px solid var(--primary); }
     </style>
 </head>
 <body>
@@ -32,29 +48,39 @@
         <input type="text" id="r-name" class="input-ui" placeholder="Имя">
         <input type="text" id="r-user" class="input-ui" placeholder="@username">
         <input type="password" id="r-pass" class="input-ui" placeholder="Пароль">
-        <button onclick="login()" style="background: var(--primary); color: white; border: none; padding: 12px 100px; border-radius: 8px;">ВОЙТИ</button>
+        <button onclick="login()" style="background: var(--primary); color: white; border: none; padding: 12px 100px; border-radius: 8px; cursor: pointer;">ВОЙТИ</button>
+    </div>
+
+    <div id="profile-modal">
+        <h3>Ваш профиль</h3>
+        <img id="my-avatar-big" class="avatar-circle" style="width:100px; height:100px; margin-bottom:15px;">
+        <br>
+        <input type="file" id="avatar-input" style="display:none" onchange="uploadAvatar(this)">
+        <button onclick="document.getElementById('avatar-input').click()" style="background:var(--primary); color:white; border:none; padding:8px 15px; border-radius:5px;">Сменить фото</button>
+        <button onclick="document.getElementById('profile-modal').style.display='none'" style="margin-top:20px; display:block; width:100%; background:none; color:white; border:1px solid #555;">Закрыть</button>
     </div>
 
     <div id="main-container" style="display:none; width: 100%;">
         <div id="sidebar">
-            <div class="header"><input type="text" id="user-search" placeholder="Поиск @юзера..." style="flex:1; background:var(--bg); color:white; border:none; padding:8px; border-radius:5px;"><button onclick="searchUser()">🔍</button></div>
+            <div class="header">
+                <img id="my-avatar-mini" class="avatar-circle" onclick="document.getElementById('profile-modal').style.display='block'">
+                <input type="text" id="user-search" placeholder="Поиск..." style="flex:1; background:#080e15; border:none; color:white; padding:8px; border-radius:8px;">
+                <button onclick="searchUser()" style="background:none; border:none; color:white;">🔍</button>
+            </div>
             <div id="list-items" style="flex:1; overflow-y:auto;"></div>
         </div>
+
         <div id="chat-window">
             <div class="header">
-                <div id="chat-info">
-                    <b id="chat-title">Выберите чат</b><br>
-                    <small id="user-status" style="color:var(--gray)"></small>
-                </div>
+                <div><b id="chat-title">Выберите чат</b><br><small id="user-status"></small></div>
             </div>
             <div id="messages"></div>
             <video id="video-preview" autoplay muted></video>
             <div class="controls">
-                <label style="cursor:pointer; font-size:20px;">📎<input type="file" style="display:none" onchange="uploadFile(this)"></label>
-                <button id="voice-btn" class="rec-btn" onmousedown="startRec('audio')" onmouseup="stopRec()">🎤</button>
-                <button id="video-btn" class="rec-btn" onmousedown="startRec('video')" onmouseup="stopRec()">📷</button>
-                <input type="text" id="msg-input" placeholder="Сообщение..." style="flex:1; background:var(--bg); color:white; border:none; padding:10px; border-radius:8px;">
-                <button onclick="send()" style="color:var(--primary); background:none; border:none; font-size:24px;">➤</button>
+                <button class="rec-btn" onmousedown="startRec('audio')" onmouseup="stopRec()">🎤</button>
+                <button class="rec-btn" onmousedown="startRec('video')" onmouseup="stopRec()">📷</button>
+                <input type="text" id="msg-input" placeholder="Сообщение..." style="flex:1; background:#080e15; color:white; border:none; padding:12px; border-radius:10px;">
+                <button onclick="send()" style="background:none; border:none; color:var(--primary); font-size:26px;">➤</button>
             </div>
         </div>
     </div>
@@ -64,21 +90,34 @@
         let me = null, currentRoom = "Общий чат", chatList = ["Общий чат"], mediaRec, chunks = [];
 
         function login() {
-            const name = document.getElementById('r-name').value;
-            const nick = document.getElementById('r-user').value.replace('@','').toLowerCase();
-            const pass = document.getElementById('r-pass').value;
-            if(name && nick && pass) socket.emit('login_attempt', { name, nick, pass });
+            const n = document.getElementById('r-name').value, u = document.getElementById('r-user').value.toLowerCase(), p = document.getElementById('r-pass').value;
+            if(n && u && p) socket.emit('login_attempt', {name:n, nick:u, pass:p});
         }
 
-        socket.on('login_success', (u) => {
+        socket.on('login_success', u => {
             me = u; document.getElementById('auth-screen').style.display = 'none';
             document.getElementById('main-container').style.display = 'flex';
-            switchRoom(currentRoom); setInterval(() => socket.emit('update_status', {nick: me.nick}), 5000);
+            document.getElementById('my-avatar-mini').src = u.avatar || 'https://www.w3schools.com/howto/img_avatar.png';
+            document.getElementById('my-avatar-big').src = u.avatar || 'https://www.w3schools.com/howto/img_avatar.png';
+            switchRoom(currentRoom);
+            setInterval(() => socket.emit('update_status', {nick: me.nick}), 5000);
         });
+
+        function uploadAvatar(input) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64 = e.target.result;
+                socket.emit('update_avatar', {nick: me.nick, avatar: base64});
+                document.getElementById('my-avatar-mini').src = base64;
+                document.getElementById('my-avatar-big').src = base64;
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
 
         function switchRoom(n) {
             currentRoom = n; document.getElementById('chat-title').innerText = n;
-            document.getElementById('messages').innerHTML = ""; socket.emit('join', {room: n, nick: me.nick});
+            document.getElementById('messages').innerHTML = ""; 
+            socket.emit('join', {room: n, nick: me.nick});
             if(!chatList.includes(n)) chatList.push(n); renderList();
         }
 
@@ -86,70 +125,63 @@
             document.getElementById('list-items').innerHTML = chatList.map(r => `<div class="chat-item" onclick="switchRoom('${r}')" style="padding:15px; cursor:pointer; border-bottom:1px solid #000;">${r}</div>`).join('');
         }
 
-        // ЗАПИСЬ ГОЛОСОВЫХ И ВИДЕО
         async function startRec(type) {
             chunks = [];
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
-            if(type === 'video') { 
-                const preview = document.getElementById('video-preview');
-                preview.srcObject = stream; preview.style.display = 'block';
-            }
+            if(type === 'video') { document.getElementById('video-preview').style.display = 'block'; document.getElementById('video-preview').srcObject = stream; }
             mediaRec = new MediaRecorder(stream);
             mediaRec.ondataavailable = e => chunks.push(e.data);
             mediaRec.onstop = () => {
                 const blob = new Blob(chunks, { type: type === 'video' ? 'video/webm' : 'audio/webm' });
                 const reader = new FileReader();
-                reader.onload = () => socket.emit('message', {
-                    user: me.name, nick: '@'+me.nick, room: currentRoom,
-                    file: reader.result, file_type: blob.type
-                });
+                reader.onload = () => socket.emit('message', { user: me.name, nick: '@'+me.nick, room: currentRoom, file: reader.result, file_type: blob.type });
                 reader.readAsDataURL(blob);
                 stream.getTracks().forEach(t => t.stop());
                 document.getElementById('video-preview').style.display = 'none';
             };
             mediaRec.start();
-            document.getElementById(type+'-btn').classList.add('rec-active');
         }
-
-        function stopRec() {
-            mediaRec.stop();
-            document.querySelectorAll('.rec-btn').forEach(b => b.classList.remove('rec-active'));
-        }
-
-        function addMsg(d) {
-            const m = document.getElementById('messages');
-            const isMy = d.nick === '@' + me.nick;
-            let content = `<span>${d.text || ''}</span>`;
-            if(d.file) {
-                if(d.file_type.includes('video')) content = `<video src="${d.file}" class="video-msg" controls></video>`;
-                else if(d.file_type.includes('audio')) content = `<audio src="${d.file}" controls style="width:200px"></audio>`;
-                else if(d.file_type.includes('image')) content = `<img src="${d.file}" style="max-width:250px; border-radius:10px;">`;
-            }
-            m.insertAdjacentHTML('beforeend', `<div class="msg" style="${isMy ? 'align-self:flex-end; background:var(--primary)' : ''}"><b>${d.user}</b><br>${content}</div>`);
-            m.scrollTop = m.scrollHeight;
-        }
-
-        socket.on('render_message', addMsg);
-        socket.on('history', msgs => msgs.forEach(addMsg));
-
-        socket.on('status_updated', d => {
-            if(currentRoom.includes(d.nick)) {
-                const isOnline = (Date.now()/1000 - d.last_seen) < 15;
-                document.getElementById('user-status').innerText = isOnline ? "в сети" : "был(а) недавно";
-                document.getElementById('user-status').style.color = isOnline ? "var(--online)" : "var(--gray)";
-            }
-        });
+        function stopRec() { mediaRec.stop(); }
 
         function send() {
             const i = document.getElementById('msg-input');
             if(i.value) { socket.emit('message', {user: me.name, nick: '@'+me.nick, text: i.value, room: currentRoom}); i.value = ''; }
         }
 
-        function searchUser() {
-            const q = document.getElementById('user-search').value;
-            socket.emit('search_user', {query: q});
+        function addMsg(d) {
+            const m = document.getElementById('messages'), isMy = d.nick === '@' + me.nick;
+            let content = `<span>${d.text || ''}</span>`;
+            if(d.file) {
+                if(d.file_type.includes('video')) content = `<video src="${d.file}" class="video-circle" controls></video>`;
+                else if(d.file_type.includes('audio')) content = `<audio src="${d.file}" controls></audio>`;
+            }
+            const html = `
+                <div class="msg ${isMy ? 'my-msg' : ''}" id="msg-${d._id}">
+                    <img class="avatar-circle" src="${d.avatar || 'https://www.w3schools.com/howto/img_avatar.png'}" style="width:30px; height:30px;">
+                    <div class="msg-content">
+                        ${isMy ? `<div class="delete-overlay" onclick="deleteGlobal('${d._id}')">×</div>` : ''}
+                        <b style="font-size:11px; color:#aaa;">${d.user}</b><br>${content}
+                    </div>
+                </div>`;
+            m.insertAdjacentHTML('beforeend', html);
+            m.scrollTop = m.scrollHeight;
         }
+
+        function deleteGlobal(id) { if(confirm("Удалить у всех?")) socket.emit('delete_msg_global', {msg_id: id, room: currentRoom}); }
+        socket.on('msg_deleted_confirm', d => document.getElementById(`msg-${d.msg_id}`)?.remove());
+        socket.on('render_message', addMsg);
+        socket.on('history', msgs => msgs.forEach(addMsg));
+        
+        function searchUser() { socket.emit('search_user', {query: document.getElementById('user-search').value}); }
         socket.on('user_found', u => switchRoom([me.nick, u.nick].sort().join('_')));
+        
+        socket.on('status_updated', d => {
+            if(currentRoom.includes(d.nick)) {
+                const online = (Date.now()/1000 - d.last_seen) < 15;
+                document.getElementById('user-status').innerText = online ? "в сети" : "был(а) недавно";
+                document.getElementById('user-status').style.color = online ? "var(--online)" : "#aaa";
+            }
+        });
     </script>
 </body>
 </html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Messenger</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        /* Темная тема в стиле TG */
+        body { background: #0e1621; color: white; font-family: sans-serif; margin: 0; }
+        #chat { height: 80vh; overflow-y: scroll; padding: 20px; display: flex; flex-direction: column; }
+        .msg { background: #182533; padding: 10px; border-radius: 10px; margin-bottom: 10px; width: fit-content; max-width: 80%; }
+        #input-area { position: fixed; bottom: 0; width: 100%; display: flex; padding: 10px; background: #17212b; }
+        input { flex: 1; background: transparent; color: white; border: none; padding: 10px; outline: none; }
+    </style>
+</head>
+<body>
+    <div id="chat"></div>
+    <div id="input-area">
+        <input id="text" placeholder="Написать сообщение...">
+        <button onclick="send()">➤</button>
+    </div>
+
+    <script>
+        const socket = io();
+        const user = "Пользователь_" + Math.floor(Math.random() * 1000);
+
+        function send() {
+            const input = document.getElementById('text');
+            if(input.value) {
+                socket.emit('message', { user: user, text: input.value });
+                input.value = '';
+            }
+        }
+
+        socket.on('render_message', function(data) {
+            const chat = document.getElementById('chat');
+            chat.innerHTML += `<div class="msg"><b>${data.user}:</b> ${data.text}</div>`;
+            chat.scrollTop = chat.scrollHeight; // Прокрутка вниз
+        });
+    </script>
+</body>
+</html>

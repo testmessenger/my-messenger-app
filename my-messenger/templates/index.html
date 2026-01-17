@@ -1,115 +1,169 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Messenger 2.0</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiteGram Pro</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
-        :root { --bg: #0e1621; --surface: #17212b; --text: white; --primary: #6ab3f3; }
-        .light-mode { --bg: #ffffff; --surface: #f0f0f0; --text: #000000; --primary: #0088cc; }
+        :root { --bg: #0e1621; --surface: #17212b; --text: #ffffff; --primary: #2481cc; --gray: #808b99; --owner: #e3a008; --admin: #3db5ad; }
+        .light-mode { --bg: #ffffff; --surface: #f4f4f5; --text: #000000; --primary: #0088cc; --gray: #707579; }
+
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
-        body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; transition: 0.3s; }
-        #auth-screen { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-        input { background: var(--surface); border: 1px solid #333; color: var(--text); padding: 12px; border-radius: 8px; margin: 5px; width: 80%; max-width: 300px; }
+        #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .input-ui { background: var(--surface); border: 1px solid var(--gray); color: var(--text); padding: 12px; border-radius: 8px; margin: 8px; width: 280px; outline: none; }
+
+        .header { background: var(--surface); height: 60px; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid rgba(0,0,0,0.2); justify-content: space-between; }
+        .search-bar { background: var(--bg); border: none; border-radius: 15px; padding: 8px; color: var(--text); width: 150px; outline: none; }
+
+        #main-container { display: none; flex: 1; overflow: hidden; }
+        #sidebar { width: 260px; background: var(--surface); border-right: 1px solid rgba(0,0,0,0.2); display: flex; flex-direction: column; }
+        #chat-window { flex: 1; display: flex; flex-direction: column; }
+        #member-list { width: 220px; background: var(--surface); border-left: 1px solid rgba(0,0,0,0.2); overflow-y: auto; padding: 10px; }
+
+        .chat-item { padding: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.2s; }
+        .chat-item.active { background: var(--primary); }
         
-        #main-container { display: none; height: 100vh; flex-direction: column; }
-        #sidebar { background: var(--surface); padding: 15px; border-bottom: 1px solid #333; display: flex; overflow-x: auto; gap: 10px; }
-        .chat-item { background: var(--bg); padding: 8px 15px; border-radius: 20px; border: 1px solid var(--primary); white-space: nowrap; cursor: pointer; }
-        
-        #chat { flex: 1; overflow-y: auto; padding: 15px; }
-        .msg { background: var(--surface); padding: 10px; border-radius: 12px; margin-bottom: 8px; width: fit-content; max-width: 80%; }
-        #input-area { background: var(--surface); padding: 15px; display: flex; gap: 10px; }
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.1); }
+        .msg { background: var(--surface); padding: 10px; border-radius: 12px; max-width: 80%; width: fit-content; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .msg b { color: var(--primary); font-size: 0.9em; }
+
+        .member-item { padding: 8px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .badge { font-size: 10px; padding: 2px 5px; border-radius: 4px; margin-left: 5px; color: white; }
+        .badge.owner { background: var(--owner); }
+        .badge.admin { background: var(--admin); }
+
+        .input-area { padding: 15px; background: var(--surface); display: flex; gap: 10px; }
+        button { cursor: pointer; border: none; border-radius: 5px; }
     </style>
 </head>
-<body class="">
+<body>
 
     <div id="auth-screen">
-        <h2>Вход в Messenger</h2>
-        <input type="text" id="reg-name" placeholder="Ваше имя">
-        <input type="text" id="reg-user" placeholder="@username">
-        <input type="password" id="reg-pass" placeholder="Password">
-        <button onclick="login()" style="width: 325px; padding: 10px; margin-top: 10px; background: var(--primary); border: none; border-radius: 8px;">Войти</button>
+        <h1 style="color: var(--primary)">LiteGram</h1>
+        <input type="text" id="r-name" class="input-ui" placeholder="Ваше Имя">
+        <input type="text" id="r-user" class="input-ui" placeholder="@username">
+        <button onclick="login()" style="background: var(--primary); color: white; padding: 12px 100px;">Войти</button>
     </div>
 
     <div id="main-container">
         <div id="sidebar">
+            <div class="header">
+                <input type="text" class="search-bar" placeholder="Поиск..." oninput="renderList(this.value)">
+                <button onclick="toggleTheme()" style="background:none; font-size:18px;">🌓</button>
             </div>
-        <div id="chat"></div>
-        <div id="input-area">
-            <button onclick="toggleTheme()" class="btn-ui">🌓</button>
-            <button onclick="createRoom()" class="btn-ui">➕</button>
-            <input type="text" id="text-input" style="flex:1" placeholder="Сообщение...">
-            <button onclick="sendText()" style="background:none; border:none; color:var(--primary); font-size: 24px;">➤</button>
+            <div id="list-items" style="flex:1; overflow-y:auto;"></div>
+            <button onclick="createRoom()" style="padding:15px; background: var(--primary); color:white;">+ Создать чат</button>
+        </div>
+
+        <div id="chat-window">
+            <div class="header">
+                <b id="chat-title">Выберите чат</b>
+                <small id="chat-status" style="color:var(--gray)"></small>
+            </div>
+            <div id="messages"></div>
+            <div class="input-area">
+                <input type="text" id="msg-input" style="flex:1; background:var(--bg); color:var(--text); border:none; padding:10px; border-radius:5px;" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') send()">
+                <button onclick="send()" style="background:none; color:var(--primary); font-size:24px;">➤</button>
+            </div>
+        </div>
+
+        <div id="member-list">
+            <h4 style="margin-top:0">Участники</h4>
+            <div id="member-items"></div>
         </div>
     </div>
 
     <script>
         const socket = io();
-        let currentUser = null;
+        let me = null;
         let currentRoom = "Общий чат";
-        let rooms = [];
+        let allRooms = ["Общий чат"];
+        let roomData = {};
 
         function login() {
-            const name = document.getElementById('reg-name').value;
-            const user = document.getElementById('reg-user').value;
-            if(name && user) {
-                currentUser = { name, user };
+            const name = document.getElementById('r-name').value;
+            const nick = document.getElementById('r-user').value;
+            if(name && nick) {
+                me = { name, nick };
                 document.getElementById('auth-screen').style.display = 'none';
                 document.getElementById('main-container').style.display = 'flex';
-                socket.emit('join', { room: currentRoom });
-                updateSidebar();
+                switchRoom(currentRoom);
+                renderList();
             }
         }
 
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
-        }
-
-        function createRoom() {
-            const name = prompt("Название группы/канала:");
-            if(name) {
-                socket.emit('create_room', { name: name, type: 'group', user: currentUser.user });
-            }
-        }
-
-        socket.on('room_created', function(data) {
-            rooms.push(data.name);
-            updateSidebar();
-        });
-
-        function updateSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            if(rooms.length === 0) {
-                sidebar.innerHTML = "<small style='opacity:0.5'>Чатов пока нет</small>";
-                return;
-            }
-            sidebar.innerHTML = rooms.map(r => `<div class="chat-item" onclick="switchRoom('${r}')">${r}</div>`).join('');
+        function renderList(filter = "") {
+            const container = document.getElementById('list-items');
+            container.innerHTML = allRooms
+                .filter(r => r.toLowerCase().includes(filter.toLowerCase()))
+                .map(r => `<div class="chat-item ${r === currentRoom ? 'active' : ''}" onclick="switchRoom('${r}')"># ${r}</div>`).join('');
         }
 
         function switchRoom(name) {
-            socket.emit('join', { room: name });
             currentRoom = name;
-            document.getElementById('chat').innerHTML = `<i>--- Вы вошли в ${name} ---</i>`;
+            document.getElementById('chat-title').innerText = name;
+            document.getElementById('messages').innerHTML = "";
+            socket.emit('join', { room: name, nick: me.nick });
+            renderList();
         }
 
-        function sendText() {
-            const el = document.getElementById('text-input');
+        function send() {
+            const el = document.getElementById('msg-input');
             if(el.value) {
-                socket.emit('message', { 
-                    user: currentUser.name, 
-                    user_at: currentUser.user, 
-                    text: el.value, 
-                    room: currentRoom 
-                });
+                socket.emit('message', { user: me.name, nick: me.nick, text: el.value, room: currentRoom });
                 el.value = '';
             }
         }
 
-        socket.on('render_message', function(data) {
-            const chat = document.getElementById('chat');
-            chat.innerHTML += `<div class="msg"><b>${data.user} (${data.user_at})</b><br>${data.text}</div>`;
-            chat.scrollTop = chat.scrollHeight;
+        socket.on('render_message', (data) => {
+            if(data.room !== currentRoom) return;
+            const m = document.getElementById('messages');
+            m.innerHTML += `<div class="msg"><b>${data.user}</b> <small style="color:var(--gray)">${data.nick}</small><br>${data.text}</div>`;
+            m.scrollTop = m.scrollHeight;
         });
+
+        socket.on('history', (msgs) => {
+            msgs.forEach(data => {
+                const m = document.getElementById('messages');
+                m.innerHTML += `<div class="msg"><b>${data.user}</b><br>${data.text}</div>`;
+            });
+        });
+
+        socket.on('room_info', (data) => {
+            roomData = data;
+            const container = document.getElementById('member-items');
+            container.innerHTML = data.members.map(m => {
+                let badge = m === data.owner ? '<span class="badge owner">Владелец</span>' : 
+                            (data.admins.includes(m) ? '<span class="badge admin">Админ</span>' : '');
+                let action = (data.owner === me.nick && m !== me.nick && !data.admins.includes(m)) ? 
+                             `<button onclick="makeAdmin('${m}')" style="font-size:9px; margin-left:5px;">+Админ</button>` : '';
+                return `<div class="member-item"><span>${m} ${badge}</span> ${action}</div>`;
+            }).join('');
+        });
+
+        function makeAdmin(target) {
+            socket.emit('make_admin', { room: currentRoom, target: target, requester: me.nick });
+        }
+
+        function createRoom() {
+            const n = prompt("Название чата/канала:");
+            if(n) {
+                socket.emit('create_room', { name: n, type: 'group', user: me.nick });
+                allRooms.push(n);
+                renderList();
+            }
+        }
+
+        socket.on('room_created', (data) => {
+            if(!allRooms.includes(data.name)) {
+                allRooms.push(data.name);
+                renderList();
+            }
+        });
+
+        function toggleTheme() { document.body.classList.toggle('light-mode'); }
     </script>
 </body>
 </html>

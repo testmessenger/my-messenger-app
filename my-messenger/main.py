@@ -6,10 +6,9 @@ from flask_socketio import SocketIO, emit, join_room
 from pymongo import MongoClient
 
 app = Flask(__name__)
-# Увеличиваем лимит данных до 50МБ для видео и аудио
+# Лимит 50МБ для передачи видео-кружочков и аудио
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=50 * 1024 * 1024)
 
-# Подключение к MongoDB
 MONGO_URL = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 client = MongoClient(MONGO_URL, connect=False)
 db = client['messenger_db']
@@ -39,6 +38,11 @@ def handle_msg(data):
     data.pop('_id', None)
     emit('render_message', data, to=data['room'])
 
+@socketio.on('typing')
+def handle_typing(data):
+    # Транслируем статус печати всем в комнате, кроме отправителя
+    emit('display_typing', data, to=data['room'], include_self=False)
+
 @socketio.on('delete_msg')
 def delete_msg(data):
     messages_col.delete_one({"id": data['id'], "nick": data['nick']})
@@ -50,11 +54,6 @@ def add_reaction(data):
     msg = messages_col.find_one({"id": data['msg_id']}, {"_id":0})
     emit('update_reactions', msg, broadcast=True)
 
-@socketio.on('call_signal')
-def call_signal(data):
-    # Передаем сигнал звонка другому пользователю
-    emit('incoming_call', data, to=data['to_room'], include_self=False)
-
 @socketio.on('join')
 def on_join(data):
     join_room(data['room'])
@@ -65,10 +64,6 @@ def on_join(data):
 @socketio.on('get_my_rooms')
 def get_rooms(data):
     emit('load_rooms', list(rooms_col.find({"members": data['nick']}, {"_id": 0})))
-
-@socketio.on('update_profile')
-def up_prof(data):
-    users_col.update_one({"nick": data['nick']}, {"$set": {"name": data['name'], "bio": data['bio'], "avatar": data['avatar']}})
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000)

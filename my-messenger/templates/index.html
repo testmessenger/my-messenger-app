@@ -1,170 +1,180 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>LiteGram Ultra</title>
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>LiteGram Ultimate</title>
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <style>
-    :root { --bg: #0e1621; --surf: #17212b; --acc: #2481cc; --txt: #fff; }
-    body { background: var(--bg); color: var(--txt); margin:0; display:flex; height:100vh; font-family: sans-serif; overflow:hidden; }
-    #sidebar { width:300px; background: var(--surf); border-right:1px solid #000; display:flex; flex-direction:column; }
-    .chat-item { padding:12px; cursor:pointer; border-bottom:1px solid #000; display:flex; justify-content:space-between; align-items:center; }
-    .chat-item.active { background: var(--acc); }
-    #chat-area { flex:1; display:flex; flex-direction:column; position:relative; }
-    #messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:10px; }
-    .msg { max-width:75%; padding:10px; border-radius:12px; position:relative; }
-    .msg.my { align-self:flex-end; background:#2b5278; }
-    .msg.other { align-self:flex-start; background:#182533; }
-    .del-btn { position:absolute; top:-5px; right:-5px; background:red; border:none; color:#fff; border-radius:50%; cursor:pointer; display:none; font-size:10px; width:18px; height:18px; }
-    .msg:hover .del-btn { display:block; }
-    #v-preview { position:absolute; bottom:80px; right:20px; width:120px; height:120px; border-radius:50%; border:2px solid red; display:none; object-fit:cover; }
-    .btn-icon { background:none; border:none; color:#808b99; cursor:pointer; font-size:20px; padding:5px; }
-    #sticker-panel { display:none; position:absolute; bottom:70px; left:10px; background:var(--surf); padding:10px; border-radius:10px; border:1px solid #000; z-index:100; grid-template-columns: repeat(4, 1fr); gap:5px; }
-    #user-menu { display:none; position:fixed; background:#2c3e50; border-radius:8px; z-index:2000; border:1px solid #444; padding:5px; }
-    #user-menu button { display:block; width:100%; padding:8px; background:none; border:none; color:#fff; cursor:pointer; text-align:left; }
-    #call-ui { position:fixed; inset:0; background:rgba(14,22,33,0.95); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:5000; }
-</style></head>
-<body>
-    <div id="user-menu"><button onclick="adminAction('promote')">Админ</button><button onclick="adminAction('mute')">Мут</button><button onclick="adminAction('ban')" style="color:red">Бан</button></div>
-    <div id="call-ui"><h2>Вызов...</h2><button onclick="endCall()" style="background:red; color:#fff; border:none; padding:10px 20px; border-radius:20px;">Завершить</button></div>
+    :root { --bg: #0e1621; --surf: #17212b; --acc: #2481cc; --txt: #fff; --msg: #182533; }
+    .light-theme { --bg: #f0f2f5; --surf: #ffffff; --acc: #0088cc; --txt: #000; --msg: #e4e6eb; }
+    body { background: var(--bg); color: var(--txt); margin:0; display:flex; height:100vh; font-family: sans-serif; transition: 0.3s; }
     
-    <div id="sidebar">
-        <div style="padding:15px; border-bottom:1px solid #000; display:flex; justify-content:space-between;">
-            <b id="my-nick">LiteGram</b><button onclick="createRoom()" class="btn-icon" style="color:var(--acc)">+</button>
-        </div>
-        <input type="text" id="search" placeholder="Поиск..." oninput="doSearch()" style="background:none; border:none; color:#fff; padding:10px;">
-        <div id="rooms-list"></div>
-    </div>
+    #auth-screen { position:fixed; inset:0; background:var(--bg); z-index:10000; display:flex; align-items:center; justify-content:center; }
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9000; align-items:center; justify-content:center; }
+    .modal-content { background:var(--surf); padding:20px; border-radius:15px; width:300px; }
 
-    <div id="chat-area">
-        <video id="v-preview" autoplay muted></video>
-        <div style="padding:10px; background:var(--surf); display:flex; justify-content:space-between; align-items:center;">
-            <b id="chat-name">Чат не выбран</b><button class="btn-icon" onclick="startCall()">📞</button>
-        </div>
-        <div id="messages"></div>
-        
-        <div id="sticker-panel">
-            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721028.png" width="40" onclick="sendMedia(this.src, 'sticker')">
-            <img src="https://cdn-icons-png.flaticon.com/512/4721/4721021.png" width="40" onclick="sendMedia(this.src, 'sticker')">
-        </div>
+    #sidebar { width:320px; background:var(--surf); border-right:1px solid rgba(0,0,0,0.2); display:flex; flex-direction:column; }
+    #chat-area { flex:1; display:flex; flex-direction:column; position:relative; }
+    #messages { flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; }
+    
+    .msg { max-width:75%; padding:10px; border-radius:12px; background:var(--msg); position:relative; }
+    .msg.my { align-self:flex-end; background:var(--acc); color:#fff; }
+    .avatar { width:40px; height:40px; border-radius:50%; object-fit:cover; }
+    .btn-icon { background:none; border:none; color:var(--acc); cursor:pointer; font-size:20px; }
+    #v-preview { position:absolute; bottom:80px; right:20px; width:120px; height:120px; border-radius:50%; border:2px solid red; display:none; object-fit:cover; }
+</style></head>
+<body class="dark-theme">
 
-        <div style="padding:10px; background:var(--surf); display:flex; align-items:center; gap:5px; position:relative;">
-            <div id="mute-msg" style="position:absolute; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center;">ВЫ В МУТЕ</div>
-            <label class="btn-icon">📎<input type="file" onchange="upFile(this)" style="display:none"></label>
-            <button class="btn-icon" onclick="toggleStickers()">😊</button>
-            <button class="btn-icon" onclick="recMedia('video')">📷</button>
-            <input id="msg-in" placeholder="Сообщение..." style="flex:1; background:none; border:none; color:#fff; outline:none;" onkeypress="if(event.key==='Enter') send()">
-            <button class="btn-icon" onclick="recMedia('audio')">🎤</button>
-            <button onclick="send()" class="btn-icon" style="color:var(--acc)">➤</button>
-        </div>
+<div id="auth-screen">
+    <div class="modal-content" style="text-align:center;">
+        <h2>LiteGram</h2>
+        <input id="a-nick" placeholder="@username"><input id="a-pass" type="password" placeholder="Пароль">
+        <button onclick="doAuth('login')" style="width:100%; padding:10px; background:var(--acc); color:#fff; border:none; margin-top:10px;">Войти</button>
+        <button onclick="doAuth('reg')" style="width:100%; margin-top:5px; background:none; color:var(--acc); border:none;">Регистрация</button>
     </div>
+</div>
+
+<div id="modal-prof" class="modal">
+    <div class="modal-content">
+        <h3>Настройки</h3>
+        Имя: <input id="p-name">
+        О себе: <textarea id="p-bio" style="width:100%"></textarea>
+        Аватар (URL): <input id="p-ava">
+        Тема: <select id="p-theme"><option value="dark-theme">Темная</option><option value="light-theme">Светлая</option></select>
+        <button onclick="saveProf()" style="width:100%; background:var(--acc); color:#fff; border:none; padding:10px; margin-top:10px;">Сохранить</button>
+        <button onclick="closeModals()" style="width:100%; margin-top:5px;">Отмена</button>
+    </div>
+</div>
+
+<div id="modal-user" class="modal">
+    <div class="modal-content" style="text-align:center;">
+        <img id="u-ava" class="avatar" style="width:80px; height:80px;">
+        <h3 id="u-name"></h3><p id="u-nick" style="color:var(--acc)"></p><p id="u-bio"></p>
+        <div id="admin-btns" style="display:none; border-top:1px solid #444; padding-top:10px;">
+            <button onclick="adm('mute')">Мут</button><button onclick="adm('ban')" style="color:red">Бан</button>
+        </div>
+        <button onclick="closeModals()" style="width:100%; margin-top:10px;">Закрыть</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <div style="padding:15px; display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="openMyProf()">
+        <img id="my-ava" class="avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png">
+        <div><b id="my-name">Имя</b><div id="my-nick" style="font-size:12px; opacity:0.6;"></div></div>
+    </div>
+    <input type="text" id="search" placeholder="🔍 Поиск сообщений..." oninput="doSearch()" style="margin:10px;">
+    <button onclick="const n=prompt('Имя группы?'); if(n) socket.emit('create_room',{name:n,nick:me.nick})" style="margin:10px;">+ Группа</button>
+    <div id="rooms-list" style="flex:1; overflow-y:auto;"></div>
+</div>
+
+<div id="chat-area">
+    <video id="v-preview" autoplay muted></video>
+    <div style="padding:10px; background:var(--surf); display:flex; justify-content:space-between; align-items:center;">
+        <b id="chat-title">Чат</b>
+        <div id="group-actions" style="display:none;"><button onclick="showMembers()">👥 Участники</button></div>
+    </div>
+    <div id="messages"></div>
+    <div id="mute-msg" style="display:none; text-align:center; background:red;">ВЫ В МУТЕ</div>
+    <div style="padding:10px; background:var(--surf); display:flex; align-items:center; gap:5px;">
+        <label class="btn-icon">📎<input type="file" onchange="upFile(this)" style="display:none"></label>
+        <button class="btn-icon" onclick="rec('video')">📷</button>
+        <input id="msg-in" placeholder="Сообщение..." style="flex:1; background:none; border:none; color:var(--txt); outline:none;" onkeypress="if(event.key==='Enter') send()">
+        <button class="btn-icon" onclick="rec('audio')">🎤</button>
+        <button onclick="send()" class="btn-icon">➤</button>
+    </div>
+</div>
 
 <script>
     const socket = io();
-    let me = null, curRoom = 'global', selUser = null, roomData = {}, isRec = false, mediaRec, chunks = [];
+    let me = null, curRoom = 'global', rData = {}, isRec = false, mediaRec, chunks = [];
 
-    window.onload = () => {
-        const s = localStorage.getItem('creds');
-        if(s) socket.emit('login_attempt', JSON.parse(s)); else login();
-    };
-
-    function login() {
-        const n = prompt("Ник?"), p = prompt("Пароль?");
-        if(n && p) {
-            const c = {nick: n.toLowerCase(), pass: p};
-            localStorage.setItem('creds', JSON.stringify(c));
-            socket.emit('login_attempt', c);
-        }
-    }
-
-    socket.on('login_success', u => {
-        me = u; document.getElementById('my-nick').innerText = u.nick;
-        socket.emit('get_rooms', {nick: me.nick});
+    function doAuth(t) { socket.emit('auth', {type:t, nick:document.getElementById('a-nick').value, pass:document.getElementById('a-pass').value}); }
+    socket.on('auth_ok', u => { 
+        me = u; document.getElementById('auth-screen').style.display='none';
+        document.getElementById('my-name').innerText = u.name;
+        document.getElementById('my-nick').innerText = '@'+u.nick;
+        if(u.avatar) document.getElementById('my-ava').src = u.avatar;
+        document.body.className = u.theme;
+        socket.emit('get_rooms', me.nick);
     });
 
     socket.on('load_rooms', rs => {
         const l = document.getElementById('rooms-list'); l.innerHTML = '';
         rs.forEach(r => {
-            const d = document.createElement('div');
-            d.className = 'chat-item' + (curRoom===r.id?' active':'');
-            d.innerHTML = `<span>${r.name}</span>${r.owner===me.nick ? `<button onclick="delChat('${r.id}',event)" class="del-btn" style="display:block">✕</button>`:''}`;
-            d.onclick = () => switchRoom(r.id, r.name);
+            const d = document.createElement('div'); d.className = 'user-row';
+            d.style.padding='10px'; d.style.cursor='pointer';
+            d.innerHTML = `<b>${r.name}</b>`;
+            d.onclick = () => {
+                curRoom = r.id; document.getElementById('chat-title').innerText = r.name;
+                document.getElementById('group-actions').style.display = r.type==='group'?'block':'none';
+                document.getElementById('messages').innerHTML = '';
+                socket.emit('join', {room:r.id, nick:me.nick});
+            };
             l.appendChild(d);
         });
     });
 
-    function switchRoom(id, name) {
-        curRoom = id; document.getElementById('chat-name').innerText = name;
-        document.getElementById('messages').innerHTML = '';
-        socket.emit('join', {room: id, nick: me.nick});
+    function openMyProf() {
+        document.getElementById('p-name').value = me.name;
+        document.getElementById('p-bio').value = me.bio;
+        document.getElementById('p-ava').value = me.avatar;
+        document.getElementById('p-theme').value = me.theme;
+        document.getElementById('modal-prof').style.display='flex';
     }
 
-    socket.on('room_update', data => {
-        roomData = data;
-        document.getElementById('mute-msg').style.display = data.muted.includes(me.nick) ? 'flex' : 'none';
-    });
+    function saveProf() {
+        socket.emit('update_profile', {nick:me.nick, name:document.getElementById('p-name').value, bio:document.getElementById('p-bio').value, avatar:document.getElementById('p-ava').value, theme:document.getElementById('p-theme').value});
+        closeModals();
+    }
 
-    socket.on('kick_user', target => { if(target === me.nick) location.reload(); });
-    socket.on('chat_gone', id => { if(curRoom === id) location.reload(); });
+    socket.on('user_info', u => {
+        document.getElementById('u-ava').src = u.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        document.getElementById('u-name').innerText = u.name;
+        document.getElementById('u-nick').innerText = '@'+u.nick;
+        document.getElementById('u-bio').innerText = u.bio;
+        document.getElementById('admin-btns').style.display = (me.nick===rData.owner || rData.admins?.includes(me.nick)) && u.nick!==me.nick ? 'block' : 'none';
+        window.selTarg = u.nick;
+        document.getElementById('modal-user').style.display='flex';
+    });
 
     function send() {
         const i = document.getElementById('msg-in');
-        if(i.value.trim()) { socket.emit('message', {room: curRoom, text: i.value, nick: me.nick}); i.value=''; }
+        if(i.value.trim()) { socket.emit('message', {room:curRoom, text:i.value, nick:me.nick, user:me.name}); i.value=''; }
     }
 
-    function upFile(el) {
-        const f = el.files[0]; const r = new FileReader();
-        r.onload = (e) => socket.emit('message', {room:curRoom, nick:me.nick, file:e.target.result, fileName:f.name, fileType:f.type});
-        r.readAsDataURL(f);
-    }
-
-    socket.on('render_message', d => { if(d.room === curRoom) render(d); });
+    socket.on('render_message', d => { if(d.room===curRoom) render(d); });
     socket.on('history', h => h.forEach(render));
-    socket.on('remove_msg', id => document.getElementById('msg-'+id)?.remove());
+    socket.on('room_update', r => { rData = r; document.getElementById('mute-msg').style.display = r.muted?.includes(me.nick)?'block':'none'; });
 
     function render(d) {
         let c = d.text ? `<div>${d.text}</div>` : '';
-        if(d.file) {
-            if(d.fileType.startsWith('image')) c = `<img src="${d.file}" style="max-width:100%; border-radius:8px;">`;
-            else c = `<a href="${d.file}" download="${d.fileName}" style="color:cyan">📄 ${d.fileName}</a>`;
-        }
-        if(d.sticker) c = `<img src="${d.sticker}" width="80">`;
-        if(d.video) c = `<video src="${d.video}" autoplay loop muted style="width:150px; border-radius:50%;"></video>`;
-        if(d.audio) c = `<audio controls src="${d.audio}" style="width:180px;"></audio>`;
-
-        const h = `<div class="msg ${d.nick===me.nick?'my':'other'}" id="msg-${d.id}">
-            <button class="del-btn" onclick="socket.emit('delete_message',{msg_id:'${d.id}',room:'${curRoom}'})">✕</button>
-            <small onclick="openMenu(event,'${d.nick}')" style="cursor:pointer; color:orange">@${d.nick}</small>${c}
-            <div onclick="socket.emit('add_reaction',{msg_id:'${d.id}',emoji:'❤️',room:'${curRoom}',nick:'${me.nick}'})" style="cursor:pointer; font-size:10px;">❤️</div>
+        if(d.file) c = d.fileType.startsWith('image') ? `<img src="${d.file}" style="max-width:100%">` : `<a href="${d.file}" download>📄 ${d.fileName}</a>`;
+        if(d.video) c = `<video src="${d.video}" autoplay loop muted style="width:150px; border-radius:50%"></video>`;
+        const h = `<div class="msg ${d.nick===me.nick?'my':''}">
+            <small onclick="socket.emit('get_user','${d.nick}')" style="cursor:pointer; opacity:0.7">@${d.nick}</small>
+            ${c}
+            <div onclick="socket.emit('add_reaction',{msg_id:'${d.id}',emoji:'❤️',room:curRoom,nick:me.nick})" style="cursor:pointer; font-size:10px;">❤️ ${Object.keys(d.reactions||{}).length}</div>
         </div>`;
-        document.getElementById('messages').insertAdjacentHTML('beforeend', h);
-        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+        const b = document.getElementById('messages'); b.insertAdjacentHTML('beforeend', h); b.scrollTop=b.scrollHeight;
     }
 
-    function openMenu(e, nick) {
-        e.preventDefault(); selUser = nick;
-        const m = document.getElementById('user-menu');
-        m.style.display = 'block'; m.style.left = e.pageX+'px'; m.style.top = e.pageY+'px';
+    function doSearch() {
+        const q = document.getElementById('search').value.toLowerCase();
+        document.querySelectorAll('.msg').forEach(m => m.style.display = m.innerText.toLowerCase().includes(q)?'block':'none');
     }
 
-    function adminAction(a) { socket.emit('admin_action', {room:curRoom, nick:me.nick, target:selUser, action:a}); }
-    function delChat(id,e) { e.stopPropagation(); if(confirm("Удалить чат?")) socket.emit('delete_chat', {room:id, nick:me.nick}); }
-    function createRoom() { const n = prompt("Имя группы?"); if(n) socket.emit('create_room', {name:n, nick:me.nick}); }
-    function toggleStickers() { const s = document.getElementById('sticker-panel'); s.style.display = s.style.display==='grid'?'none':'grid'; }
-    function sendMedia(url, type) { socket.emit('message', {room:curRoom, [type]:url, nick:me.nick}); toggleStickers(); }
-    function startCall() { document.getElementById('call-ui').style.display='flex'; }
-    function endCall() { document.getElementById('call-ui').style.display='none'; }
-    function doSearch() { const q = document.getElementById('search').value.toLowerCase(); document.querySelectorAll('.chat-item').forEach(el => el.style.display = el.innerText.toLowerCase().includes(q)?'flex':'none'); }
+    function adm(a) { socket.emit('admin_action', {room:curRoom, target:window.selTarg, action:a, nick:me.nick}); closeModals(); }
+    function closeModals() { document.querySelectorAll('.modal').forEach(m=>m.style.display='none'); }
+    function upFile(el) { const f=el.files[0]; const r=new FileReader(); r.onload=e=>socket.emit('message',{room:curRoom,nick:me.nick,file:e.target.result,fileName:f.name,fileType:f.type}); r.readAsDataURL(f); }
 
-    async function recMedia(type) {
+    async function rec(mode) {
         if(!isRec) {
-            const s = await navigator.mediaDevices.getUserMedia({audio:true, video:type==='video'});
-            if(type==='video') { const p=document.getElementById('v-preview'); p.srcObject=s; p.style.display='block'; }
+            const s = await navigator.mediaDevices.getUserMedia({audio:true, video:mode==='video'});
+            if(mode==='video') { const p=document.getElementById('v-preview'); p.srcObject=s; p.style.display='block'; }
             mediaRec = new MediaRecorder(s); chunks = [];
             mediaRec.ondataavailable = e => chunks.push(e.data);
             mediaRec.onstop = () => {
-                const b = new Blob(chunks, {type: 'video/webm'});
-                const r = new FileReader(); r.onloadend = () => socket.emit('message', {room:curRoom, [type]:r.result, nick:me.nick});
+                const b = new Blob(chunks, {type: mode==='video'?'video/webm':'audio/webm'});
+                const r = new FileReader(); r.onloadend = () => socket.emit('message', {room:curRoom, [mode]:r.result, nick:me.nick});
                 r.readAsDataURL(b); s.getTracks().forEach(t => t.stop()); document.getElementById('v-preview').style.display='none';
             };
             mediaRec.start(); isRec=true;
         } else { mediaRec.stop(); isRec=false; }
     }
-    document.addEventListener('click', () => document.getElementById('user-menu').style.display='none');
 </script></body></html>

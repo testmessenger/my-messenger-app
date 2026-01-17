@@ -8,9 +8,9 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-# Увеличиваем лимит для передачи фото
-socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=10 * 1024 * 1024)
+socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=20 * 1024 * 1024)
 
+# Подключение к MongoDB
 MONGO_URL = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 client = MongoClient(MONGO_URL, connect=False)
 db = client['messenger_db']
@@ -35,7 +35,6 @@ def login(data):
 @socketio.on('update_profile_image')
 def update_img(data):
     users_col.update_one({"nick": data['nick']}, {"$set": {"avatar": data['img']}})
-    emit('avatar_updated', data['img'])
 
 @socketio.on('search')
 def search(data):
@@ -46,14 +45,17 @@ def search(data):
 
 @socketio.on('message')
 def handle_msg(data):
-    res = messages_col.insert_one(data)
+    data['time'] = time.time()
+    res = messages_col.insert_one(data.copy())
     data['_id'] = str(res.inserted_id)
     emit('render_message', data, to=data['room'])
 
 @socketio.on('join')
 def on_join(data):
-    join_room(data['room'])
-    h = list(messages_col.find({"room": data['room']}).sort("_id", -1).limit(40))
+    room = data['room']
+    join_room(room)
+    # Загружаем последние 50 сообщений
+    h = list(messages_col.find({"room": room}).sort("_id", -1).limit(50))
     for m in h: m['_id'] = str(m['_id'])
     emit('history', h[::-1])
 

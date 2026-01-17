@@ -8,15 +8,14 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'litegram-ultra-2026'
-# Увеличиваем буфер для передачи видео/аудио
-socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=50 * 1024 * 1024)
+app.config['SECRET_KEY'] = 'ultra-litegram-2026'
+# Увеличен буфер для передачи длинных голосовых сообщений
+socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=100 * 1024 * 1024)
 
-# ИСПРАВЛЕННАЯ СТРОКА (с параметром SSL)
+# Подключение к MongoDB с защитой от ошибок SSL
 MONGO_URL = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 client = MongoClient(MONGO_URL)
 db = client['messenger_db']
-
 users_col = db['users']
 messages_col = db['messages']
 
@@ -31,8 +30,7 @@ def handle_login(data):
     if user:
         if user['password'] == data['pass']:
             emit('login_success', {"name": user['name'], "nick": nick, "avatar": user.get('avatar', '')})
-        else:
-            emit('login_error', "Неверный пароль!")
+        else: emit('login_error', "Неверный пароль!")
     else:
         new_user = {"nick": nick, "password": data['pass'], "name": data['name'], "avatar": "", "last_seen": time.time()}
         users_col.insert_one(new_user)
@@ -48,20 +46,23 @@ def handle_message(data):
     data['_id'] = str(res.inserted_id)
     emit('render_message', data, to=data['room'])
 
+@socketio.on('typing')
+def handle_typing(data):
+    emit('user_typing', data, room=data['room'], include_self=False)
+
 @socketio.on('add_reaction')
 def add_reaction(data):
     msg_id = data['msg_id']
-    emoji = data['emoji']
-    user_nick = data['nick']
     msg = messages_col.find_one({"_id": ObjectId(msg_id)})
     if msg:
         reactions = msg.get('reactions', {})
+        emoji = data['emoji']
+        u = data['nick']
         if emoji in reactions:
-            if user_nick in reactions[emoji]: reactions[emoji].remove(user_nick)
-            else: reactions[emoji].append(user_nick)
+            if u in reactions[emoji]: reactions[emoji].remove(u)
+            else: reactions[emoji].append(u)
             if not reactions[emoji]: del reactions[emoji]
-        else:
-            reactions[emoji] = [user_nick]
+        else: reactions[emoji] = [u]
         messages_col.update_one({"_id": ObjectId(msg_id)}, {"$set": {"reactions": reactions}})
         emit('update_reactions', {"msg_id": msg_id, "reactions": reactions}, to=data['room'])
 
@@ -77,11 +78,6 @@ def on_join(data):
     for m in history: m['_id'] = str(m['_id'])
     emit('history', history[::-1])
 
-@socketio.on('update_status')
-def update_status(data):
-    users_col.update_one({"nick": data['nick'].replace('@','')}, {"$set": {"last_seen": time.time()}})
-
-# СИГНАЛИНГ ДЛЯ ВИДЕОЗВОНКОВ
 @socketio.on('join_call')
 def handle_join_call(data):
     room = data['room'] + "_video"
@@ -97,5 +93,4 @@ def update_avatar(data):
     users_col.update_one({"nick": data['nick']}, {"$set": {"avatar": data['avatar']}})
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

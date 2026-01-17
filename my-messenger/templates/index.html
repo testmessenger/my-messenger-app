@@ -1,27 +1,30 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Ultra Messenger</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Messenger</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
-        body { background: #0e1621; color: white; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        #chat { flex: 1; overflow-y: auto; padding: 15px; }
-        .msg { background: #182533; padding: 10px; border-radius: 12px; margin-bottom: 10px; position: relative; max-width: 85%; width: fit-content; }
-        .msg b { color: #5288c1; display: block; margin-bottom: 5px; }
-        .msg img, .msg video { max-width: 100%; border-radius: 8px; margin-top: 5px; }
-        #input-area { background: #17212b; padding: 15px; display: flex; align-items: center; gap: 10px; }
-        input[type="text"] { flex: 1; background: #242f3d; border: none; color: white; padding: 10px; border-radius: 8px; outline: none; }
-        .btn { cursor: pointer; background: none; border: none; font-size: 20px; color: #6ab3f3; }
-        .del-btn { color: #ef5350; font-size: 12px; margin-left: 10px; vertical-align: middle; }
+        body { background: #0e1621; color: white; font-family: -apple-system, blinkmacsystemfont, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { background: #182533; padding: 10px 15px; border-radius: 12px; position: relative; max-width: 80%; width: fit-content; animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .msg b { color: #5288c1; font-size: 0.9em; display: block; margin-bottom: 4px; }
+        .msg img, .msg video { max-width: 100%; border-radius: 8px; margin-top: 5px; display: block; }
+        .del-btn { color: #ef5350; font-size: 11px; cursor: pointer; margin-left: 10px; opacity: 0.6; }
+        .del-btn:hover { opacity: 1; }
+        #input-area { background: #17212b; padding: 15px; display: flex; align-items: center; gap: 12px; }
+        input[type="text"] { flex: 1; background: #242f3d; border: none; color: white; padding: 12px; border-radius: 10px; outline: none; }
+        .btn-ui { cursor: pointer; color: #6ab3f3; font-size: 24px; user-select: none; }
     </style>
 </head>
 <body>
     <div id="chat"></div>
     <div id="input-area">
-        <label class="btn">📎<input type="file" id="file-input" style="display:none" onchange="sendFile()"></label>
-        <input type="text" id="text-input" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') sendText()">
-        <button class="btn" onclick="sendText()">➤</button>
+        <label class="btn-ui">📎<input type="file" id="file-input" style="display:none" onchange="uploadFile()"></label>
+        <input type="text" id="text-input" placeholder="Напишите сообщение..." onkeypress="if(event.key==='Enter') sendText()">
+        <div class="btn-ui" onclick="sendText()">➤</div>
     </div>
 
     <script>
@@ -29,23 +32,22 @@
         const myName = "User_" + Math.floor(Math.random() * 1000);
 
         function sendText() {
-            const input = document.getElementById('text-input');
-            if(input.value) {
-                socket.emit('message', { user: myName, type: 'text', content: input.value });
-                input.value = '';
+            const el = document.getElementById('text-input');
+            if(el.value.trim()) {
+                socket.emit('message', { user: myName, type: 'text', content: el.value });
+                el.value = '';
             }
         }
 
-        function sendFile() {
+        function uploadFile() {
             const file = document.getElementById('file-input').files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 let type = 'file';
                 if (file.type.startsWith('image/')) type = 'image';
                 else if (file.type.startsWith('video/')) type = 'video';
-
+                
                 socket.emit('message', {
                     user: myName,
                     type: type,
@@ -53,24 +55,20 @@
                     filename: file.name
                 });
             };
-            reader.readAsDataURL(file); // Для теста читаем как DataURL (для больших файлов > 50MB лучше использовать бинарный поток)
+            reader.readAsDataURL(file);
         }
 
         socket.on('render_message', function(data) {
             const chat = document.getElementById('chat');
-            let contentHtml = '';
-
-            if (data.type === 'text') contentHtml = `<span class="text">${data.content}</span>`;
-            else if (data.type === 'image') contentHtml = `<img src="${data.content}">`;
-            else if (data.type === 'video') contentHtml = `<video controls src="${data.content}"></video>`;
-            else contentHtml = `<a href="${data.content}" download="${data.filename}" style="color:#6ab3f3">📁 ${data.filename}</a>`;
-
-            chat.innerHTML += `
-                <div class="msg" id="msg-${data.id}">
-                    <b>${data.user}</b>
-                    ${contentHtml}
-                    <span class="del-btn" onclick="deleteMsg('${data.id}')">Удалить</span>
-                </div>`;
+            let html = `<div class="msg" id="msg-${data.id}"><b>${data.user}</b>`;
+            
+            if (data.type === 'text') html += `<span>${data.content}</span>`;
+            else if (data.type === 'image') html += `<img src="${data.content}">`;
+            else if (data.type === 'video') html += `<video controls src="${data.content}"></video>`;
+            else html += `<a href="${data.content}" download="${data.filename}" style="color:#6ab3f3">📁 ${data.filename}</a>`;
+            
+            html += `<span class="del-btn" onclick="deleteMsg('${data.id}')">Удалить</span></div>`;
+            chat.innerHTML += html;
             chat.scrollTop = chat.scrollHeight;
         });
 

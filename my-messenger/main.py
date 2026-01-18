@@ -1,5 +1,5 @@
 import eventlet
-eventlet.monkey_patch()
+eventlet.monkey_patch()  # Это должно быть ПЕРВОЙ строкой кода
 
 import os
 import datetime
@@ -11,20 +11,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_CORE_2026'
+app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_FULL_STABLE_2026'
 
-# --- ИСПРАВЛЕНИЕ ОШИБОК ПУТЕЙ ---
-UPLOAD_PATH = os.path.join(app.root_path, 'static', 'uploads')
-if not os.path.exists(UPLOAD_PATH):
-    try:
-        os.makedirs(UPLOAD_PATH, exist_ok=True)
-    except Exception as e:
-        print(f"Log: Directory already exists or error: {e}")
+# --- ИСПРАВЛЕНИЕ ПУТЕЙ (RENDER FIX) ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_PATH = os.path.join(BASE_DIR, 'static', 'uploads')
+
+if os.path.exists(UPLOAD_PATH) and not os.path.isdir(UPLOAD_PATH):
+    os.remove(UPLOAD_PATH)
+
+os.makedirs(UPLOAD_PATH, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_PATH
 
 # --- БАЗА ДАННЫХ ---
 client = MongoClient("mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true")
 db = client['messenger_db']
+
+# Инициализация SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', max_http_buffer_size=100000000)
 
 online_users = {} # sid: uid
@@ -42,7 +45,7 @@ def get_u():
         return db.users.find_one({"_id": ObjectId(session['user_id'])})
     except: return None
 
-# --- МАРШРУТЫ (ROUTES) ---
+# --- РОУТЫ (АВТОРИЗАЦИЯ, ПРОФИЛЬ, ПОИСК) ---
 
 @app.route('/')
 def index():
@@ -50,7 +53,7 @@ def index():
     if not u: return redirect('/auth')
     return render_template('index.html', user=fix(u))
 
-@app.route('/auth') # ИСПРАВЛЕНО: теперь 404 не будет
+@app.route('/auth')
 def auth():
     return render_template('auth.html')
 
@@ -72,7 +75,7 @@ def handle_auth():
         else: return jsonify({"e": "Ошибка входа"}), 401
     return jsonify({"s": "ok"})
 
-@app.route('/api/search') # ГЛОБАЛЬНЫЙ ПОИСК ПО @USERNAME И ГРУППАМ
+@app.route('/api/search')
 def search():
     q = request.args.get('q', '').replace('@', '')
     if not q: return jsonify({"users": [], "groups": []})
@@ -91,6 +94,8 @@ def update_profile():
     }})
     return jsonify({"s": "ok"})
 
+# --- ГРУППЫ И АДМИНКА ---
+
 @app.route('/api/groups', methods=['GET', 'POST'])
 def handle_groups():
     u = get_u()
@@ -106,8 +111,29 @@ def handle_groups():
     gs = list(db.groups.find({"members": str(u['_id'])}))
     for g in gs:
         g['m_count'] = len(g['members'])
-        g['member_details'] = fix(list(db.users.find({"_id": {"$in": [ObjectId(m) for m in g['members']]}}, {"pw":0})))
+        # Получаем данные всех участников для списка
+        m_list = list(db.users.find({"_id": {"$in": [ObjectId(m) for m in g['members']]}}, {"pw":0}))
+        g['member_details'] = fix(m_list)
     return jsonify(fix(gs))
+
+@app.route('/api/groups/admin_control', methods=['POST'])
+def admin_control():
+    u = get_u()
+    d = request.json # gid, target_uid, action
+    g = db.groups.find_one({"_id": ObjectId(d['gid'])})
+    if not g or str(u['_id']) not in g['admins']: return "Error", 403
+    
+    if d['action'] == 'ban':
+        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"banned": d['target_uid']}, "$pull": {"members": d['target_uid']}})
+    elif d['action'] == 'mute':
+        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"muted": d['target_uid']}})
+    elif d['action'] == 'promote':
+        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"admins": d['target_uid']}})
+    elif d['action'] == 'delete' and g['owner'] == str(u['_id']):
+        db.groups.delete_one({"_id": g['_id']})
+        db.messages.delete_many({"room": d['gid']})
+        
+    return jsonify({"s": "ok"})
 
 @app.route('/api/upload', methods=['POST'])
 def upload():
@@ -123,7 +149,7 @@ def upload():
 def history(rid):
     return jsonify(fix(list(db.messages.find({"room": rid}).sort("ts", -1).limit(50))[::-1]))
 
-# --- SOCKETS (РЕАЛЬНОЕ ВРЕМЯ И СТАТУСЫ) ---
+# --- SOCKETS (СТАТУСЫ, ПЕЧАТАЕТ, ЗВОНКИ, РЕАКЦИИ) ---
 
 @socketio.on('connect')
 def on_connect():
@@ -139,23 +165,22 @@ def on_disconnect():
     uid = online_users.get(request.sid)
     if uid:
         last = datetime.datetime.now().strftime("%H:%M")
-        db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"is_online": False, "last_seen": last}})
-        emit('status_ev', {"uid": uid, "on": False, "last": last}, broadcast=True)
+        db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"is_online": False, "last_seen": f"был(а) в {last}"}})
+        emit('status_ev', {"uid": uid, "on": False, "last": f"был(а) в {last}"}, broadcast=True)
         online_users.pop(request.sid, None)
 
 @socketio.on('join')
 def on_join(d): 
     join_room(d['room'])
 
-@socketio.on('typing') # ЛОГИКА "ПЕЧАТАЕТ"
+@socketio.on('typing')
 def on_typing(d):
     u = get_u()
     if u:
+        # В группе передаем имя, в ЛС — просто флаг
         emit('typing_ev', {
-            "name": u['name'], 
-            "room": d['room'], 
-            "st": d['st'], # true - начал, false - закончил
-            "is_g": d['is_g'] # флаг: группа это или ЛС
+            "name": u['name'], "room": d['room'], 
+            "st": d['st'], "is_g": d['is_g']
         }, room=d['room'], include_self=False)
 
 @socketio.on('msg')
@@ -163,8 +188,8 @@ def on_msg(d):
     u = get_u()
     if not u: return
     
-    # Проверка МУТА и БАНА в группах
-    if len(d['room']) == 24:
+    # ПРОВЕРКА БАНА И МУТА
+    if len(d['room']) == 24: # ID группы
         g = db.groups.find_one({"_id": ObjectId(d['room'])})
         if g:
             if str(u['_id']) in g.get('banned', []): return
@@ -180,14 +205,25 @@ def on_msg(d):
     m['_id'] = str(db.messages.insert_one(m).inserted_id)
     emit('new_msg', m, room=d['room'])
 
-@socketio.on('delete_msg') # УДАЛЕНИЕ ДЛЯ АВТОРА И АДМИНА
+@socketio.on('react')
+def on_react(d): # mid, emoji, uid, room
+    db.messages.update_one({"_id": ObjectId(d['mid'])}, {"$set": {f"reacts.{d['uid']}": d['emoji']}})
+    emit('update_reacts', d, room=d['room'])
+
+@socketio.on('call_init')
+def on_call(d):
+    u = get_u()
+    if u:
+        emit('incoming_call', {"from": u['name'], "from_av": u['av'], "room": d['room']}, room=d['room'], include_self=False)
+
+@socketio.on('delete_msg')
 def on_delete(d):
     u = get_u()
     msg = db.messages.find_one({"_id": ObjectId(d['mid'])})
     if not msg: return
     
     can_del = str(u['_id']) == msg['sid'] # Автор
-    if not can_del and len(d['room']) == 24: # Или админ группы
+    if not can_del and len(d['room']) == 24: # Проверка прав админа в группе
         g = db.groups.find_one({"_id": ObjectId(d['room'])})
         if g and str(u['_id']) in g.get('admins', []): can_del = True
         
@@ -195,12 +231,7 @@ def on_delete(d):
         db.messages.delete_one({"_id": ObjectId(d['mid'])})
         emit('msg_deleted', d['mid'], room=d['room'])
 
-@socketio.on('call_init') # ЗВОНКИ
-def on_call(d):
-    u = get_u()
-    if u:
-        emit('incoming_call', {"from": u['name'], "room": d['room']}, room=d['room'], include_self=False)
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
+    # ПРЯМОЙ ЗАПУСК ДЛЯ СТАБИЛЬНОСТИ НА RENDER
     socketio.run(app, host='0.0.0.0', port=port)

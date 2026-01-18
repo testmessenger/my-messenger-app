@@ -1,15 +1,16 @@
 import eventlet
 eventlet.monkey_patch()
+import datetime, json, os
 from flask import Flask, render_template, request, session, redirect, jsonify
 from flask_socketio import SocketIO, emit, join_room
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
-import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'NEXUS_ULTRA_CORE_2026'
+app.config['SECRET_KEY'] = 'NEXUS_ULTRA_FINAL_CODE'
 
+# Подключение к базе
 client = MongoClient("mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true")
 db = client['messenger_db']
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=100000000)
@@ -38,7 +39,7 @@ def handle_auth():
     d = request.json
     if d.get('reg'):
         if db.users.find_one({"username": d['username']}): return jsonify({"e": "Ник занят"}), 400
-        uid = db.users.insert_one({"username": d['username'], "pw": generate_password_hash(d['pw']), "name": d['username'], "av": "https://ui-avatars.com/api/?name="+d['username'], "bio": "Nexus User", "theme": "dark"}).inserted_id
+        uid = db.users.insert_one({"username": d['username'], "pw": generate_password_hash(d['pw']), "name": d['username'], "av": "https://cdn-icons-png.flaticon.com/512/149/149071.png", "bio": "Nexus User", "theme": "dark"}).inserted_id
         session['user_id'] = str(uid)
     else:
         u = db.users.find_one({"username": d['username']})
@@ -46,9 +47,10 @@ def handle_auth():
         else: return jsonify({"e": "Ошибка входа"}), 401
     return jsonify({"s": "ok"})
 
-@app.route('/api/profile/update', methods=['POST'])
-def update_profile():
-    db.users.update_one({"_id": get_u()['_id']}, {"$set": request.json})
+@app.route('/api/profile/save', methods=['POST'])
+def save_profile():
+    u = get_u()
+    db.users.update_one({"_id": u['_id']}, {"$set": request.json})
     return "ok"
 
 @app.route('/api/search_global/<q>')
@@ -64,7 +66,7 @@ def manage_groups():
         return jsonify({"id": str(gid)})
     if request.method == 'DELETE':
         g = db.groups.find_one({"_id": ObjectId(request.json['gid'])})
-        if g['owner'] == str(u['_id']):
+        if g and g['owner'] == str(u['_id']):
             db.groups.delete_one({"_id": g['_id']})
             db.messages.delete_many({"room": str(g['_id'])})
         return "ok"
@@ -72,7 +74,7 @@ def manage_groups():
     return jsonify(fix(gs))
 
 @app.route('/api/admin_action', methods=['POST'])
-def admin_act():
+def admin_action():
     u = get_u(); d = request.json; g = db.groups.find_one({"_id": ObjectId(d['gid'])})
     if str(u['_id']) not in g['admins']: return "Error", 403
     if d['act'] == 'ban': db.groups.update_one({"_id": g['_id']}, {"$pull": {"members": d['target']}, "$push": {"banned": d['target']}})
@@ -84,7 +86,7 @@ def admin_act():
 def get_hist(rid):
     return jsonify(fix(list(db.messages.find({"room": rid}).sort("ts", -1).limit(50))[::-1]))
 
-# --- SOCKETS (ГОЛОСОВЫЕ, ПЕЧАТАЕТ, РЕАКЦИИ) ---
+# --- SOCKETS ---
 @socketio.on('join')
 def on_join(d): join_room(d['room'])
 
@@ -96,19 +98,22 @@ def on_type(d):
 @socketio.on('msg')
 def on_msg(d):
     u = get_u()
-    if len(d['room']) == 24:
+    if len(d['room']) == 24: # Проверка мута/бана в группе
         g = db.groups.find_one({"_id": ObjectId(d['room'])})
         if str(u['_id']) in g.get('muted', []): return
+        if str(u['_id']) in g.get('banned', []): return
+
     msg = {"room": d['room'], "sid": str(u['_id']), "name": u['name'], "av": u['av'], "txt": d.get('txt'), "type": d.get('type', 'text'), "url": d.get('url'), "reacts": {}, "ts": datetime.datetime.utcnow().isoformat()}
-    msg['_id'] = str(db.messages.insert_one(msg).inserted_id)
+    res = db.messages.insert_one(msg)
+    msg['_id'] = str(res.inserted_id)
     emit('new_msg', msg, room=d['room'])
 
-@socketio.on('call_init')
+@socketio.on('call_start')
 def on_call(d):
     u = get_u()
     emit('incoming_call', {"from": u['name'], "room": d['room']}, room=d['room'], include_self=False)
 
-@socketio.on('react')
+@socketio.on('add_react')
 def on_react(d):
     db.messages.update_one({"_id": ObjectId(d['mid'])}, {"$inc": {f"reacts.{d['emoji']}": 1}})
     emit('update_react', d, room=d['room'])
@@ -116,7 +121,8 @@ def on_react(d):
 @socketio.on('del_msg')
 def on_del(d):
     u = get_u(); m = db.messages.find_one({"_id": ObjectId(d['mid'])})
-    if m['sid'] == str(u['_id']):
+    g = db.groups.find_one({"_id": ObjectId(m['room'])}) if len(m['room']) == 24 else None
+    if m['sid'] == str(u['_id']) or (g and str(u['_id']) in g['admins']):
         db.messages.delete_one({"_id": ObjectId(d['mid'])})
         emit('msg_deleted', d['mid'], room=m['room'])
 

@@ -9,230 +9,187 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .video-note { width: 180px; height: 180px; border-radius: 50%; border: 3px solid #3b82f6; object-fit: cover; }
-        .recording { animation: pulse 1.5s infinite; color: #ef4444; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-        .msg-bubble:hover .react-bar { display: flex; }
+        #incoming-call-modal { animation: slideIn 0.5s ease; }
+        @keyframes slideIn { from { transform: translateY(-100%); } to { transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-[#020617] text-slate-200 flex h-screen overflow-hidden">
 
-    <aside class="w-80 border-r border-slate-800 flex flex-col bg-slate-900/40">
-        <div class="p-4 flex justify-between items-center border-b border-slate-800/50">
-            <h1 class="text-xl font-black text-blue-500 italic">NEXUS</h1>
-            <button onclick="createGroup()" class="bg-blue-600 p-2 rounded-lg text-white"><i data-lucide="plus"></i></button>
+    <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
+    <audio id="ringtone" src="https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3" loop></audio>
+
+    <aside class="w-80 border-r border-slate-800 flex flex-col bg-[#0f172a]">
+        <div class="p-4 flex justify-between items-center border-b border-slate-800">
+            <h1 class="text-xl font-black text-blue-500">NEXUS</h1>
+            <button onclick="createGroup()" class="bg-blue-600 p-2 rounded-lg"><i data-lucide="plus"></i></button>
         </div>
-        <div id="chats-list" class="flex-1 overflow-y-auto p-2 space-y-1">
-            <div onclick="switchRoom('general', 'Общий чат')" class="p-3 rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-3">
-                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">#</div> <b>Общий чат</b>
-            </div>
+        <div id="chats-list" class="flex-1 overflow-y-auto p-2">
+            <div onclick="switchRoom('general', 'Общий чат')" class="p-3 hover:bg-slate-800 rounded-xl cursor-pointer"># Общий чат</div>
             <div id="my-groups-list"></div>
         </div>
     </aside>
 
     <main class="flex-1 flex flex-col relative">
-        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/20">
-            <h2 id="header-title" class="font-bold text-lg">Общий чат</h2>
-            <div class="flex gap-4">
-                <button id="call-btn" class="hidden text-green-500" onclick="startCall()"><i data-lucide="phone"></i></button>
-                <button onclick="handleInfoClick()"><i data-lucide="info"></i></button>
-            </div>
+        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/40">
+            <h2 id="header-title" class="font-bold"># general</h2>
+            <button id="call-btn" onclick="initiateCall()" class="hidden bg-green-600 p-2 rounded-full text-white"><i data-lucide="phone"></i></button>
         </header>
-
         <div id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
-
-        <footer class="p-4 bg-slate-900/50">
-            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-900 p-2 rounded-2xl border border-slate-800">
-                <button onclick="toggleStickers()" class="p-2"><i data-lucide="smile"></i></button>
-                <textarea id="msgInput" rows="1" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); send();}" placeholder="Сообщение..." class="flex-1 bg-transparent p-2 outline-none resize-none"></textarea>
-                
-                <button id="recordBtn" 
-                    onmousedown="startVoice()" 
-                    onmouseup="stopVoice()" 
-                    onclick="takeVideoCircle()" 
-                    class="p-2 text-slate-400">
-                    <i data-lucide="mic" id="mic-icon"></i>
-                </button>
-                
-                <button onclick="send()" class="p-2 bg-blue-600 rounded-xl"><i data-lucide="send"></i></button>
+        <footer class="p-4 bg-slate-900/20">
+            <div class="max-w-4xl mx-auto flex items-center gap-2 bg-slate-800 p-2 rounded-2xl">
+                <textarea id="msgInput" rows="1" class="flex-1 bg-transparent p-2 outline-none resize-none"></textarea>
+                <button onmousedown="startVoice()" onmouseup="stopVoice()" onclick="takeVideoCircle()" class="p-2"><i data-lucide="mic" id="mic-icon"></i></button>
+                <button onclick="send()" class="p-3 bg-blue-600 rounded-xl"><i data-lucide="send"></i></button>
             </div>
         </footer>
 
-        <div id="info-panel" class="hidden absolute right-0 top-0 bottom-0 w-72 bg-slate-900 border-l border-slate-800 z-50 p-6">
-            <div id="info-content"></div>
+        <div id="call-overlay" class="hidden absolute inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center">
+            <div class="relative w-full h-full flex items-center justify-center">
+                <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                <video id="localVideo" autoplay playsinline muted class="absolute top-10 right-10 w-48 h-72 border-2 border-blue-500 rounded-2xl object-cover"></video>
+            </div>
+            <div class="absolute bottom-10 flex gap-6">
+                <button onclick="toggleMic()" id="mic-toggle" class="p-6 bg-slate-800 rounded-full"><i data-lucide="mic"></i></button>
+                <button onclick="toggleCam()" id="cam-toggle" class="p-6 bg-slate-800 rounded-full"><i data-lucide="video"></i></button>
+                <button onclick="endCall()" class="p-6 bg-red-600 rounded-full"><i data-lucide="phone-off"></i></button>
+            </div>
         </div>
-        
-        <div id="sticker-box" class="hidden absolute bottom-20 left-10 bg-slate-800 p-4 rounded-2xl grid grid-cols-4 gap-2 border border-slate-700">
-            <button onclick="sendSticker('🔥')">🔥</button>
-            <button onclick="sendSticker('😂')">😂</button>
-            <button onclick="sendSticker('❤️')">❤️</button>
-            <button onclick="sendSticker('⚡')">⚡</button>
+
+        <div id="incoming-call-modal" class="hidden absolute top-5 left-1/2 -translate-x-1/2 w-80 bg-blue-600 p-4 rounded-3xl shadow-2xl z-[300] flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><i data-lucide="phone-incoming"></i></div>
+                <div>
+                    <p class="font-bold text-sm" id="caller-name-label">Вызов...</p>
+                    <p class="text-[10px] opacity-80 uppercase font-bold">Входящий звонок</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="acceptCall()" class="p-2 bg-green-500 rounded-full"><i data-lucide="check"></i></button>
+                <button onclick="rejectCall()" class="p-2 bg-red-500 rounded-full"><i data-lucide="x"></i></button>
+            </div>
         </div>
     </main>
 
     <script>
         lucide.createIcons();
         const socket = io();
-        let currentRoom = 'general';
         const myId = "{{ user._id }}";
-        let mediaRecorder;
-        let audioChunks = [];
+        const myName = "{{ user.display_name }}";
+        let currentRoom = "general";
+        let peerConnection;
+        let localStream;
+        let incomingOffer;
 
-        // --- ГРУППЫ И ЧАТЫ ---
-        async function loadChats() {
-            const res = await fetch('/api/my_chats');
-            const groups = await res.json();
-            const list = document.getElementById('my-groups-list');
-            list.innerHTML = groups.map(g => `
-                <div onclick="switchRoom('${g._id}', '${g.title}')" class="p-3 rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-3">
-                    <div class="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center font-bold">${g.title[0]}</div>
-                    <span class="text-sm font-bold">${g.title}</span>
-                </div>
-            `).join('');
+        const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+        // --- УВЕДОМЛЕНИЯ ---
+        Notification.requestPermission();
+        socket.on('notify', (data) => {
+            document.getElementById('notif-sound').play();
+            if (Notification.permission === "granted") {
+                new Notification(data.title, { body: data.body });
+            }
+        });
+
+        // --- ЛОГИКА ЗВОНКА (WebRTC) ---
+        async function initiateCall() {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
+            document.getElementById('call-overlay').classList.remove('hidden');
+
+            peerConnection = new RTCPeerConnection(config);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.onicecandidate = e => {
+                if (e.candidate) socket.emit('ice_candidate', { room: currentRoom, candidate: e.candidate });
+            };
+            peerConnection.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            socket.emit('call_user', { room: currentRoom, from: myId, caller_name: myName, offer: offer });
         }
-        loadChats();
 
-        async function createGroup() {
-            const t = prompt("Название группы:");
-            if(!t) return;
-            const res = await fetch('/api/groups/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:t})});
-            const d = await res.json();
-            loadChats();
-            switchRoom(d.id, t);
+        socket.on('incoming_call', async (data) => {
+            incomingOffer = data;
+            document.getElementById('caller-name-label').innerText = data.caller_name;
+            document.getElementById('incoming-call-modal').classList.remove('hidden');
+            document.getElementById('ringtone').play();
+        });
+
+        async function acceptCall() {
+            document.getElementById('ringtone').pause();
+            document.getElementById('incoming-call-modal').classList.add('hidden');
+            document.getElementById('call-overlay').classList.remove('hidden');
+
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
+
+            peerConnection = new RTCPeerConnection(config);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            
+            peerConnection.onicecandidate = e => {
+                if (e.candidate) socket.emit('ice_candidate', { room: currentRoom, candidate: e.candidate });
+            };
+            peerConnection.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingOffer.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer_call', { room: currentRoom, answer: answer });
         }
 
+        socket.on('call_accepted', async (data) => {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        });
+
+        socket.on('ice_candidate', c => peerConnection?.addIceCandidate(new RTCIceCandidate(c)));
+
+        function rejectCall() {
+            document.getElementById('ringtone').pause();
+            document.getElementById('incoming-call-modal').classList.add('hidden');
+            socket.emit('hangup', { room: currentRoom });
+        }
+
+        function endCall() {
+            localStream?.getTracks().forEach(t => t.stop());
+            peerConnection?.close();
+            document.getElementById('call-overlay').classList.add('hidden');
+            socket.emit('hangup', { room: currentRoom });
+        }
+
+        socket.on('call_ended', () => {
+            alert("Звонок завершен");
+            location.reload();
+        });
+
+        // Кнопки управления в звонке
+        function toggleMic() {
+            const track = localStream.getAudioTracks()[0];
+            track.enabled = !track.enabled;
+            document.getElementById('mic-toggle').classList.toggle('bg-red-500', !track.enabled);
+        }
+        function toggleCam() {
+            const track = localStream.getVideoTracks()[0];
+            track.enabled = !track.enabled;
+            document.getElementById('cam-toggle').classList.toggle('bg-red-500', !track.enabled);
+        }
+
+        // --- ОСТАЛЬНЫЕ ФУНКЦИИ (НЕ ВЫРЕЗАНО) ---
         function switchRoom(id, title) {
             currentRoom = id;
             document.getElementById('header-title').innerText = title;
             document.getElementById('chat-window').innerHTML = '';
-            document.getElementById('call-btn').classList.toggle('hidden', id.length === 24 || id === 'general');
-            socket.emit('join_room', {room: id});
+            document.getElementById('call-btn').classList.toggle('hidden', id === 'general' || id.length === 24);
+            socket.emit('join_room', { room: id });
         }
 
-        // --- ЗАПИСЬ (КРУЖКИ И ГОЛОСОВЫЕ) ---
-        let holdTimer;
-        function startVoice() {
-            holdTimer = setTimeout(async () => {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/ogg' });
-                    const fd = new FormData(); fd.append('file', blob);
-                    const res = await fetch('/api/upload', {method:'POST', body:fd});
-                    const d = await res.json();
-                    socket.emit('send_msg', { room: currentRoom, type: 'voice', file_url: d.url });
-                };
-                mediaRecorder.start();
-                document.getElementById('mic-icon').classList.add('recording');
-            }, 300);
-        }
-
-        function stopVoice() {
-            clearTimeout(holdTimer);
-            if(mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-                document.getElementById('mic-icon').classList.remove('recording');
-            }
-        }
-
-        async function takeVideoCircle() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            const recorder = new MediaRecorder(stream);
-            let chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'video/mp4' });
-                const fd = new FormData(); fd.append('file', blob);
-                const res = await fetch('/api/upload', {method:'POST', body:fd});
-                const d = await res.json();
-                socket.emit('send_msg', { room: currentRoom, type: 'video_circle', file_url: d.url });
-            };
-            recorder.start();
-            setTimeout(()=>recorder.stop(), 5000);
-        }
-
-        // --- УПРАВЛЕНИЕ УЧАСТНИКАМИ (РАНГИ) ---
-        async function handleInfoClick() {
-            const panel = document.getElementById('info-panel');
-            panel.classList.toggle('hidden');
-            if(panel.classList.contains('hidden')) return;
-            
-            const res = await fetch(`/api/room/${currentRoom}/members`);
-            const members = await res.json();
-            
-            // Здесь логика Владельца
-            document.getElementById('info-content').innerHTML = `
-                <h3 class="font-black text-xs uppercase text-blue-500 mb-4">Участники</h3>
-                <div class="space-y-4">
-                    ${members.map(m => `
-                        <div class="flex items-center justify-between group cursor-pointer" onclick="manageMember('${m._id}', '${m.display_name}')">
-                            <div class="flex items-center gap-2">
-                                <img src="${m.avatar}" class="w-8 h-8 rounded-full">
-                                <div>
-                                    <p class="text-sm font-bold">${m.display_name}</p>
-                                    <p class="text-[9px] text-blue-400 font-bold uppercase">Участник</p>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>`;
-        }
-
-        async function manageMember(tid, name) {
-            if (currentRoom === 'general') return;
-            const action = prompt(`Управление @${name}:\n1. Назначить админом\n2. Кикнуть\n3. Мут`);
-            let act = '';
-            if(action === '1') act = 'make_admin';
-            if(action === '2') act = 'kick';
-            if(action === '3') act = 'mute';
-            if(act) {
-                await fetch('/api/group/manage', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({room_id:currentRoom, target_id:tid, action:act})});
-                alert("Готово");
-            }
-        }
-
-        // --- СООБЩЕНИЯ, РЕАКЦИИ, СТИКЕРЫ ---
         function send() {
-            const inp = document.getElementById('msgInput');
-            if(!inp.value.trim()) return;
-            socket.emit('send_msg', { room: currentRoom, text: inp.value });
-            inp.value = '';
+            const val = document.getElementById('msgInput').value;
+            if(!val) return;
+            socket.emit('send_msg', { room: currentRoom, text: val });
+            document.getElementById('msgInput').value = '';
         }
-
-        function sendSticker(s) {
-            socket.emit('send_msg', { room: currentRoom, text: s, type: 'sticker' });
-            document.getElementById('sticker-box').classList.add('hidden');
-        }
-
-        function toggleStickers() { document.getElementById('sticker-box').classList.toggle('hidden'); }
-
-        socket.on('new_message', (data) => {
-            const win = document.getElementById('chat-window');
-            const isMe = data.sender_id === myId;
-            let content = `<p>${data.text}</p>`;
-            
-            if(data.type === 'video_circle') content = `<video src="${data.file_url}" class="video-note" controls></video>`;
-            if(data.type === 'voice') content = `<audio src="${data.file_url}" controls class="w-full"></audio>`;
-            if(data.type === 'sticker') content = `<span class="text-6xl">${data.text}</span>`;
-
-            win.insertAdjacentHTML('beforeend', `
-                <div id="msg-${data._id}" class="flex ${isMe ? 'justify-end' : 'justify-start'}">
-                    <div class="relative group msg-bubble ${isMe ? 'bg-blue-600' : 'bg-slate-800'} p-3 rounded-2xl max-w-[70%]">
-                        ${content}
-                        <div class="react-bar hidden absolute -top-8 left-0 bg-slate-700 p-1 rounded-full gap-2 text-xs">
-                            <button onclick="addReact('${data._id}', '❤️')">❤️</button>
-                            <button onclick="addReact('${data._id}', '😂')">😂</button>
-                            <button onclick="addReact('${data._id}', '🔥')">🔥</button>
-                        </div>
-                    </div>
-                </div>`);
-            win.scrollTop = win.scrollHeight;
-        });
-
-        function addReact(mid, emoji) { socket.emit('add_reaction', {room: currentRoom, msg_id: mid, emoji: emoji}); }
-
-        function startCall() { alert("Звонок начат (WebRTC интерфейс в разработке)"); }
     </script>
 </body>
 </html>

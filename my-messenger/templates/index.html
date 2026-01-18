@@ -3,84 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Nexus 2026</title>
+    <title>Nexus Infinity 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body.dark { background: #020617; color: #f8fafc; }
+        body.dark { background: #020617; color: #f1f5f9; }
         body.light { background: #f8fafc; color: #0f172a; }
         .circle-vid { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
+        .mobile-view #side { display: none; }
+        .mobile-view #chat-win { display: flex; width: 100%; }
         .typing-dots::after { content: '...'; animation: t 1.5s infinite; }
         @keyframes t { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
-        .mobile-view #side { display: none; }
-        .mobile-view #main-chat { display: flex; width: 100%; }
-        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); }
     </style>
 </head>
 <body class="{{ user.theme }} flex h-screen overflow-hidden">
     <audio id="snd-msg" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
     <audio id="snd-call" src="https://assets.mixkit.co/active_storage/sfx/1353/1353-preview.mp3" loop></audio>
 
-    <aside id="side" class="w-full md:w-80 border-r border-slate-800 flex flex-col z-20 bg-slate-900/50">
-        <div class="p-4 flex justify-between items-center border-b border-slate-800">
+    <aside id="side" class="w-full md:w-80 border-r border-slate-800 bg-slate-900 flex flex-col z-20">
+        <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
             <h1 class="text-2xl font-black italic text-blue-500">NEXUS</h1>
-            <button onclick="document.getElementById('profile-modal').classList.remove('hidden')"><i data-lucide="settings"></i></button>
+            <div class="flex gap-2">
+                <button onclick="toggleTheme()"><i data-lucide="sun"></i></button>
+                <button onclick="createG()"><i data-lucide="plus-square"></i></button>
+            </div>
         </div>
-        
-        <div class="p-4 space-y-2">
-            <input id="search-in" oninput="globalSearch(this.value)" placeholder="Поиск @username..." class="w-full bg-slate-800 p-2.5 rounded-xl text-xs outline-none border border-slate-700">
-            <button onclick="createGrp()" class="w-full bg-blue-600/20 text-blue-400 py-2 rounded-xl text-xs font-bold">+ Группа</button>
+        <div class="p-4"><input id="g-search" oninput="globalSearch(this.value)" placeholder="Поиск @username..." class="w-full bg-slate-800 p-3 rounded-2xl text-xs outline-none border border-slate-700"></div>
+        <div id="chat-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
+        <div class="p-4 border-t border-slate-800 flex items-center gap-3 cursor-pointer" onclick="openProfileSettings()">
+            <img src="{{ user.av }}" class="w-10 h-10 rounded-full border-2 border-blue-600">
+            <div class="flex-1 overflow-hidden"><p class="font-bold text-sm truncate">{{ user.name }}</p><p class="text-[10px] text-slate-500">@{{ user.username }}</p></div>
         </div>
-
-        <div id="chat-list" class="flex-1 overflow-y-auto"></div>
     </aside>
 
-    <main id="main-chat" class="hidden md:flex flex-1 flex-col relative">
+    <main id="chat-win" class="hidden md:flex flex-1 flex-col relative bg-slate-950/20">
         <header class="h-16 border-b border-slate-800 flex items-center justify-between px-4 glass">
             <div class="flex items-center gap-3">
-                <button onclick="back()" class="md:hidden"><i data-lucide="chevron-left"></i></button>
-                <div onclick="showGroupMenu()" class="cursor-pointer">
-                    <h2 id="r-title" class="font-bold text-sm truncate max-w-[150px]">Выберите чат</h2>
-                    <p id="r-status" class="text-[10px] text-blue-400"></p>
-                    <div id="typing-box" class="hidden text-[10px] italic text-slate-500"><span id="t-name"></span><span class="typing-dots"></span></div>
+                <button onclick="back()" class="md:hidden"><i data-lucide="arrow-left"></i></button>
+                <div onclick="showInfo()" class="cursor-pointer">
+                    <h2 id="r-title" class="font-bold text-sm">Nexus Чат</h2>
+                    <p id="r-last" class="text-[10px] text-blue-400"></p>
+                    <div id="t-box" class="hidden text-[10px] italic text-slate-500"><span id="t-user"></span><span class="typing-dots"></span></div>
                 </div>
             </div>
             <div class="flex gap-4">
-                <button onclick="call()" class="text-green-500"><i data-lucide="phone"></i></button>
-                <button onclick="toggleTheme()" class="text-slate-400"><i data-lucide="sun"></i></button>
+                <button onclick="makeCall()" class="text-green-500"><i data-lucide="phone"></i></button>
+                <button onclick="delGroup()" id="btn-del-g" class="text-red-500 hidden"><i data-lucide="trash-2"></i></button>
             </div>
         </header>
 
-        <div id="win" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+        <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
 
-        <footer class="p-4 border-t border-slate-800">
-            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-800 p-2 rounded-2xl">
-                <label class="p-2 cursor-pointer"><i data-lucide="paperclip"></i><input type="file" id="f-up" class="hidden" onchange="sendFile()"></label>
-                <textarea id="min" rows="1" class="flex-1 bg-transparent p-2 outline-none text-sm resize-none" placeholder="Сообщение..."></textarea>
+        <footer class="p-4 border-t border-slate-800 bg-slate-900/50">
+            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-800 p-2 rounded-2xl border border-slate-700">
+                <label class="p-2 cursor-pointer hover:text-blue-400"><i data-lucide="paperclip"></i><input type="file" id="f-in" class="hidden" onchange="sendFile()"></label>
+                <textarea id="min" rows="1" class="flex-1 bg-transparent p-2 outline-none text-sm resize-none" placeholder="Напишите сообщение..."></textarea>
                 <button onclick="recCircle()"><i data-lucide="camera" class="text-blue-400"></i></button>
-                <button onclick="send()" class="bg-blue-600 p-2.5 rounded-xl"><i data-lucide="send"></i></button>
+                <button onclick="send()" class="bg-blue-600 p-2.5 rounded-xl text-white"><i data-lucide="send"></i></button>
             </div>
         </footer>
     </main>
 
-    <div id="call-ui" class="hidden fixed inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-center">
-        <div class="w-24 h-24 bg-blue-600 rounded-full animate-pulse flex items-center justify-center text-4xl mb-4">📞</div>
-        <h2 id="caller" class="text-xl font-bold mb-10">Входящий вызов...</h2>
+    <div id="call-ui" class="hidden fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center p-10">
+        <div class="w-32 h-32 bg-blue-600 rounded-full animate-pulse mb-8 flex items-center justify-center text-5xl">📞</div>
+        <h2 id="caller-name" class="text-2xl font-bold mb-10 text-center">Входящий вызов...</h2>
         <div class="flex gap-10">
-            <button onclick="endCall()" class="bg-red-600 p-6 rounded-full"><i data-lucide="phone-off"></i></button>
-            <button onclick="endCall()" class="bg-green-600 p-6 rounded-full"><i data-lucide="phone"></i></button>
+            <button onclick="ans(false)" class="bg-red-600 p-6 rounded-full shadow-2xl"><i data-lucide="phone-off"></i></button>
+            <button onclick="ans(true)" class="bg-green-600 p-6 rounded-full shadow-2xl"><i data-lucide="phone"></i></button>
         </div>
     </div>
 
-    <div id="profile-modal" class="hidden fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] w-full max-w-sm">
-            <h3 class="font-bold mb-4">Настройки профиля</h3>
-            <input id="new-name" placeholder="Имя" class="w-full bg-slate-800 p-2 rounded-xl mb-2 text-sm">
-            <input id="new-av" placeholder="URL аватара" class="w-full bg-slate-800 p-2 rounded-xl mb-2 text-sm">
-            <textarea id="new-bio" placeholder="О себе" class="w-full bg-slate-800 p-2 rounded-xl mb-4 text-sm"></textarea>
-            <button onclick="saveProf()" class="w-full bg-blue-600 py-3 rounded-xl font-bold">Сохранить</button>
-            <button onclick="document.getElementById('profile-modal').classList.add('hidden')" class="w-full text-slate-500 mt-2 text-sm">Закрыть</button>
+    <div id="prof-modal" class="hidden fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] w-full max-w-sm">
+            <h3 class="font-bold mb-4">Настройки</h3>
+            <input id="u-name" placeholder="Имя" class="w-full bg-slate-800 p-3 rounded-xl mb-2 text-sm">
+            <input id="u-av" placeholder="URL аватара" class="w-full bg-slate-800 p-3 rounded-xl mb-4 text-sm">
+            <button onclick="saveProfile()" class="w-full bg-blue-600 py-4 rounded-xl font-bold">Сохранить</button>
+            <button onclick="this.parentElement.parentElement.classList.add('hidden')" class="w-full text-slate-500 mt-2 text-sm">Отмена</button>
         </div>
     </div>
 
@@ -89,7 +89,7 @@
         const socket = io();
         let cur = null, isG = false, myId = "{{ user._id }}";
 
-        // --- СООБЩЕНИЯ И ПЕЧАТАЕТ ---
+        // --- ТАЙПИНГ ---
         let t_to;
         document.getElementById('min').addEventListener('input', () => {
             if(!cur) return;
@@ -99,78 +99,84 @@
         });
 
         socket.on('is_typing', d => {
-            const box = document.getElementById('typing-box');
-            if(d.st) { box.classList.remove('hidden'); document.getElementById('t-name').innerText = d.is_g ? d.name+' печатает' : 'печатает'; }
-            else box.classList.add('hidden');
+            const box = document.getElementById('t-box');
+            if(d.st) { 
+                box.classList.remove('hidden'); 
+                document.getElementById('t-user').innerText = d.is_g ? d.name + ' печатает' : 'печатает';
+            } else box.classList.add('hidden');
         });
 
+        // --- СООБЩЕНИЯ И МЕДИА ---
         socket.on('new_msg', m => {
-            if(m.room === cur) renderMsg(m);
+            if(m.room === cur) renderM(m);
             if(m.sid !== myId) document.getElementById('snd-msg').play();
         });
 
         socket.on('incoming_call', d => {
             document.getElementById('call-ui').classList.remove('hidden');
-            document.getElementById('caller').innerText = d.from + " звонит...";
+            document.getElementById('caller-name').innerText = d.from + " звонит...";
             document.getElementById('snd-call').play();
         });
 
-        function renderMsg(m) {
+        function renderM(m) {
             const me = m.sid === myId;
             let body = `<p class="text-sm">${m.txt || ''}</p>`;
             if(m.type==='circle') body=`<video src="${m.url}" class="circle-vid" autoplay loop muted></video>`;
-            if(m.type==='file') body=`<a href="${m.url}" download class="flex items-center gap-2 text-blue-400 text-xs"><i data-lucide="file"></i> ${m.txt}</a>`;
+            if(m.type==='file') body=`<a href="${m.url}" download class="text-blue-400 text-xs underline">📁 Файл: ${m.txt}</a>`;
             
-            const html = `<div id="m-${m._id}" class="flex ${me?'justify-end':'justify-start'}">
-                <div class="max-w-[85%] p-3 rounded-2xl ${me?'bg-blue-600':'bg-slate-800'} relative group shadow-xl">
+            const html = `<div class="flex ${me?'justify-end':'justify-start'}">
+                <div class="max-w-[85%] p-3 rounded-2xl ${me?'bg-blue-600 text-white':'bg-slate-800'} relative group shadow-lg">
                     <p class="text-[9px] font-bold opacity-50 mb-1">${m.name}</p>
                     ${body}
-                    <button onclick="socket.emit('del_msg', {mid:'${m._id}'})" class="hidden group-hover:block absolute -top-2 -right-2 bg-red-500 rounded-full p-0.5 text-[8px]">✕</button>
+                    <div class="absolute -right-8 top-0 hidden group-hover:flex flex-col gap-2">
+                        <button onclick="socket.emit('react', {mid:'${m._id}', emoji:'❤️', room:'${cur}'})">❤️</button>
+                        <button onclick="socket.emit('del_msg', {mid:'${m._id}'})" class="text-red-500 text-[10px]">✕</button>
+                    </div>
                 </div>
             </div>`;
-            document.getElementById('win').insertAdjacentHTML('beforeend', html);
-            document.getElementById('win').scrollTop = document.getElementById('win').scrollHeight;
-            lucide.createIcons();
+            document.getElementById('messages').insertAdjacentHTML('beforeend', html);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
         }
 
-        // --- ГЛОБАЛЬНЫЙ ПОИСК И ЧАТЫ ---
-        async function globalSearch(q) {
-            if(q.length < 2) { loadChats(); return; }
-            const r = await fetch(`/api/search_user/${q}`);
-            const users = await r.json();
-            document.getElementById('chat-list').innerHTML = users.map(u => `
-                <div onclick="openChat('${u._id}', '${u.name}', 'private')" class="p-3 border-b border-slate-800 flex items-center gap-3 bg-blue-900/10">
-                    <img src="${u.av}" class="w-10 h-10 rounded-full">
-                    <div><p class="font-bold text-sm">${u.name}</p><p class="text-[10px]">@${u.username}</p></div>
-                </div>
-            `).join('');
-        }
-
-        async function loadChats() {
-            const r = await fetch('/api/groups');
-            const gs = await r.json();
-            document.getElementById('chat-list').innerHTML = gs.map(g => `
-                <div onclick="openChat('${g._id}', '${g.title}', 'group')" class="p-4 border-b border-slate-800 hover:bg-slate-800 transition cursor-pointer">
-                    <p class="font-bold text-sm"># ${g.title}</p>
-                </div>
-            `).join('');
-        }
-
+        // --- ФУНКЦИИ ---
         async function openChat(id, name, type) {
             cur = id; isG = type === 'group';
             document.body.classList.add('mobile-view');
             document.getElementById('r-title').innerText = name;
+            document.getElementById('messages').innerHTML = '';
             socket.emit('join', {room: id});
-            const h = await fetch(`/api/history/${id}`);
-            const ms = await h.json();
-            document.getElementById('win').innerHTML = '';
-            ms.forEach(renderMsg);
-
+            
             if(!isG) {
-                const ur = await fetch(`/api/search_user/${name}`);
-                const ud = await ur.json();
-                if(ud[0]) document.getElementById('r-status').innerText = 'был(а) недавно';
-            } else { document.getElementById('r-status').innerText = 'чат группы'; }
+                document.getElementById('r-last').innerText = 'был(а) недавно';
+            } else {
+                document.getElementById('r-last').innerText = 'групповой чат';
+            }
+
+            const h = await fetch(`/api/history/${id}`);
+            const data = await h.json();
+            data.forEach(renderM);
+        }
+
+        async function globalSearch(q) {
+            if(q.length < 2) { loadList(); return; }
+            const r = await fetch(`/api/search_global/${q}`);
+            const users = await r.json();
+            document.getElementById('chat-list').innerHTML = users.map(u => `
+                <div onclick="openChat('${u._id}', '${u.name}', 'private')" class="p-3 bg-blue-900/10 rounded-xl cursor-pointer flex items-center gap-3 mb-2">
+                    <img src="${u.av}" class="w-8 h-8 rounded-full">
+                    <p class="font-bold text-xs">${u.name} (@${u.username})</p>
+                </div>
+            `).join('');
+        }
+
+        async function loadList() {
+            const r = await fetch('/api/groups');
+            const data = await r.json();
+            document.getElementById('chat-list').innerHTML = data.map(g => `
+                <div onclick="openChat('${g._id}', '${g.title}', 'group')" class="p-4 bg-slate-800/50 rounded-2xl cursor-pointer hover:bg-blue-600/20 transition mb-2">
+                    <p class="font-bold text-sm"># ${g.title}</p>
+                </div>
+            `).join('');
         }
 
         async function recCircle() {
@@ -187,9 +193,9 @@
         }
 
         function sendFile() {
-            const f = document.getElementById('f-up').files[0];
+            const f = document.getElementById('f-in').files[0];
             const r = new FileReader();
-            r.onload = () => socket.emit('msg', {room: cur, type:'file', url: r.result, txt: f.name});
+            r.onload = () => socket.emit('msg', {room: cur, type: 'file', url: r.result, txt: f.name});
             r.readAsDataURL(f);
         }
 
@@ -199,25 +205,25 @@
             document.getElementById('min').value = '';
         }
 
-        async function createGrp() {
-            const t = prompt("Имя группы:");
+        async function createG() {
+            const t = prompt("Название группы:");
             if(t) {
                 await fetch('/api/groups', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({t: t})});
-                loadChats();
+                loadList();
             }
         }
 
-        function saveProf() {
-            const d = {name: document.getElementById('new-name').value, av: document.getElementById('new-av').value, bio: document.getElementById('new-bio').value};
-            fetch('/api/user/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)}).then(() => location.reload());
-        }
-
-        function call() { socket.emit('call_signal', {room: cur}); }
-        function endCall() { document.getElementById('call-ui').classList.add('hidden'); document.getElementById('snd-call').pause(); }
+        function ans(v) { document.getElementById('call-ui').classList.add('hidden'); document.getElementById('snd-call').pause(); }
+        function makeCall() { socket.emit('call_init', {room: cur}); }
         function back() { document.body.classList.remove('mobile-view'); }
         function toggleTheme() { document.body.classList.toggle('dark'); }
+        function openProfileSettings() { document.getElementById('prof-modal').classList.remove('hidden'); }
+        function saveProfile() {
+            const d = {name: document.getElementById('u-name').value, av: document.getElementById('u-av').value};
+            fetch('/api/profile/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)}).then(()=>location.reload());
+        }
 
-        loadChats();
+        loadList();
     </script>
 </body>
 </html>

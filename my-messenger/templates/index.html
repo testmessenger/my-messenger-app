@@ -2,104 +2,125 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexus Premium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Nexus</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .dark { --bg: #0b0e14; --txt: #f1f5f9; --glass: rgba(15, 23, 42, 0.8); }
-        .light { --bg: #ffffff; --txt: #1e293b; --glass: rgba(241, 245, 249, 0.8); }
-        body { background: var(--bg); color: var(--txt); transition: 0.3s; overflow: hidden; }
-        .glass { background: var(--glass); backdrop-filter: blur(15px); border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .circle-msg { width: 200px; height: 200px; border-radius: 50%; border: 3px solid #3b82f6; overflow: hidden; object-fit: cover; }
-        .modal { display: none; position: fixed; inset: 0; z-index: 100; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); }
+        :root { --bg: #0b0e14; --txt: #f1f5f9; --glass: rgba(15, 23, 42, 0.8); }
+        .light { --bg: #ffffff; --txt: #0f172a; --glass: rgba(241, 245, 249, 0.8); }
+        body { background: var(--bg); color: var(--txt); transition: 0.3s; font-family: sans-serif; }
+        .glass { background: var(--glass); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .msg-in { background: rgba(128,128,128,0.1); border-radius: 18px 18px 18px 4px; }
+        .msg-out { background: #3b82f6; color: white; border-radius: 18px 18px 4px 18px; }
+        .modal { display: none; position: fixed; inset: 0; z-index: 100; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); }
         .modal.active { display: flex; }
+        .circle-vid { width: 220px; height: 220px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
         @media (max-width: 768px) {
-            #side { width: 100%; position: absolute; z-index: 20; transition: 0.3s; }
+            #side { width: 100%; position: absolute; z-index: 50; transition: 0.4s; }
+            #main { width: 100%; position: absolute; }
             body.chat-active #side { transform: translateX(-100%); }
         }
     </style>
 </head>
 <body class="{{ user.theme }}">
-    <audio id="snd-msg" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
-    <audio id="snd-call" src="https://assets.mixkit.co/active_storage/sfx/1353/1353-preview.mp3" loop></audio>
+    <audio id="snd-msg" src="https://cdn.pixabay.com/audio/2022/03/15/audio_730303038b.mp3"></audio>
+    <audio id="snd-call" src="https://cdn.pixabay.com/audio/2022/03/10/audio_c330368141.mp3" loop></audio>
 
-    <div class="flex h-screen">
-        <aside id="side" class="w-80 border-r border-slate-800/10 flex flex-col glass">
+    <div class="flex h-screen overflow-hidden">
+        <aside id="side" class="w-80 border-r border-white/5 flex flex-col glass">
             <div class="p-6 flex justify-between items-center">
-                <h1 class="text-3xl font-black text-blue-500 italic">NEXUS</h1>
+                <h1 class="text-2xl font-black text-blue-500 italic">NEXUS</h1>
                 <div class="flex gap-4">
-                    <button onclick="openM('m-grp')"><i data-lucide="plus-circle"></i></button>
+                    <button onclick="openM('m-grp')"><i data-lucide="plus-square"></i></button>
                     <button onclick="openM('m-set')"><i data-lucide="settings"></i></button>
                 </div>
             </div>
-            <div id="chat-list" class="flex-1 overflow-y-auto px-4"></div>
+            <div id="chat-list" class="flex-1 overflow-y-auto px-4 space-y-2"></div>
         </aside>
 
-        <main class="flex-1 flex flex-col relative bg-transparent">
+        <main id="main" class="flex-1 flex flex-col relative">
             <header class="h-20 glass flex items-center justify-between px-6">
                 <div class="flex items-center gap-4">
-                    <button onclick="back()" class="md:hidden"><i data-lucide="arrow-left"></i></button>
+                    <button onclick="back()" class="md:hidden"><i data-lucide="chevron-left"></i></button>
                     <div>
-                        <h2 id="r-title" class="font-bold">Выберите чат</h2>
-                        <p id="r-status" class="text-[11px] opacity-50">был(а) недавно</p>
-                        <p id="t-box" class="hidden text-[11px] text-blue-500 italic"><span id="t-name"></span> печатает...</p>
+                        <h2 id="r-title" class="font-bold">Nexus Messenger</h2>
+                        <div id="stat-cont">
+                            <p id="r-status" class="text-[10px] opacity-50">выберите чат</p>
+                            <p id="t-box" class="hidden text-[10px] text-blue-500 italic"><span id="t-name"></span> печатает...</p>
+                        </div>
                     </div>
                 </div>
-                <div class="flex gap-5">
+                <div class="flex gap-5 text-slate-400">
                     <button id="call-btn" onclick="initCall()" class="hidden"><i data-lucide="phone"></i></button>
-                    <button onclick="openM('m-members')"><i data-lucide="info"></i></button>
+                    <button onclick="openM('m-info')"><i data-lucide="info"></i></button>
                 </div>
             </header>
 
             <div id="win" class="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col"></div>
 
             <footer class="p-4 glass">
-                <div id="emoji-panel" class="hidden bg-slate-900 p-4 rounded-2xl mb-2 flex gap-4 overflow-x-auto">
-                    <button onclick="sendSticker('🔥')" class="text-3xl">🔥</button>
-                    <button onclick="sendSticker('❤️')" class="text-3xl">❤️</button>
-                    <button onclick="sendSticker('😂')" class="text-3xl">😂</button>
-                    <button onclick="sendSticker('👍')" class="text-3xl">👍</button>
+                <div id="emoji-p" class="hidden flex gap-4 p-4 bg-slate-900/50 rounded-2xl mb-2 overflow-x-auto">
+                    <button onclick="sendSticker('❤️')" class="text-2xl">❤️</button>
+                    <button onclick="sendSticker('😂')" class="text-2xl">😂</button>
+                    <button onclick="sendSticker('🔥')" class="text-2xl">🔥</button>
+                    <button onclick="sendSticker('👍')" class="text-2xl">👍</button>
                 </div>
-
-                <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-500/10 p-2 rounded-3xl">
-                    <button onclick="togglePanel()" class="p-3 text-blue-500"><i data-lucide="smile"></i></button>
-                    <label class="p-3 cursor-pointer"><i data-lucide="paperclip"></i><input type="file" class="hidden" onchange="uploadFile(this)"></label>
-                    <textarea id="min" rows="1" class="flex-1 bg-transparent p-3 outline-none text-sm" placeholder="Сообщение..."></textarea>
+                <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-500/10 p-2 rounded-[2rem]">
+                    <button onclick="openE()" class="p-3 text-blue-500"><i data-lucide="smile"></i></button>
+                    <button onclick="document.getElementById('f-up').click()" class="p-3"><i data-lucide="paperclip"></i></button>
+                    <input type="file" id="f-up" class="hidden" onchange="upFile(this)">
+                    <textarea id="min" rows="1" class="flex-1 bg-transparent p-3 outline-none text-sm resize-none" placeholder="Сообщение..."></textarea>
                     
-                    <button onmousedown="startRec('audio')" onmouseup="stopRec('audio')" class="p-3 text-red-500"><i data-lucide="mic"></i></button>
-                    <button onclick="recCircle()" class="p-3 text-blue-500"><i data-lucide="camera"></i></button>
+                    <button onclick="recAudio()" class="p-3 text-red-500"><i data-lucide="mic"></i></button>
+                    <button onclick="recVideo()" class="p-3 text-blue-500"><i data-lucide="camera"></i></button>
                     
-                    <button onclick="sendMsg()" class="bg-blue-600 p-4 rounded-2xl text-white active:scale-90"><i data-lucide="send"></i></button>
+                    <button onclick="sendMsg()" class="bg-blue-600 p-4 rounded-full text-white"><i data-lucide="send"></i></button>
                 </div>
             </footer>
         </main>
     </div>
 
-    <div id="m-members" class="modal">
+    <div id="m-set" class="modal">
+        <div class="glass p-8 rounded-[2rem] w-full max-w-sm text-center">
+            <h2 class="text-xl font-bold mb-6">Настройки</h2>
+            <div class="relative w-20 h-20 mx-auto mb-4">
+                <img src="{{ user.av }}" id="set-av" class="w-full h-full rounded-full object-cover">
+                <button onclick="document.getElementById('av-up').click()" class="absolute bottom-0 right-0 bg-blue-600 p-1 rounded-full"><i data-lucide="camera" class="w-4 h-4"></i></button>
+                <input type="file" id="av-up" class="hidden" onchange="upAv(this)">
+            </div>
+            <input id="set-n" type="text" value="{{ user.name }}" class="w-full bg-white/5 p-4 rounded-xl mb-4 outline-none">
+            <input id="set-b" type="text" value="{{ user.bio }}" class="w-full bg-white/5 p-4 rounded-xl mb-6 outline-none">
+            <button onclick="saveSet()" class="w-full bg-blue-600 p-4 rounded-xl font-bold">Сохранить</button>
+            <button onclick="closeM('m-set')" class="mt-4 opacity-50">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="m-info" class="modal">
         <div class="glass p-8 rounded-[2rem] w-full max-w-sm">
-            <h3 class="text-xl font-bold mb-4 text-blue-500">Участники</h3>
-            <div id="member-list" class="space-y-3 max-h-60 overflow-y-auto"></div>
-            <button onclick="closeM('m-members')" class="w-full mt-6 bg-slate-800 p-3 rounded-xl">Закрыть</button>
+            <h3 class="text-lg font-bold mb-4">Участники</h3>
+            <div id="inf-list" class="space-y-3 max-h-60 overflow-y-auto"></div>
+            <button onclick="closeM('m-info')" class="w-full mt-6 bg-white/5 p-3 rounded-xl">Назад</button>
         </div>
     </div>
 
     <div id="m-grp" class="modal">
         <div class="glass p-8 rounded-[2rem] w-full max-w-sm">
-            <h3 class="text-xl font-bold mb-4">Создать группу</h3>
-            <input id="gt" type="text" placeholder="Название" class="w-full bg-slate-500/10 p-4 rounded-xl mb-4 outline-none">
+            <h3 class="font-bold mb-4">Создать группу</h3>
+            <input id="gt" type="text" placeholder="Название" class="w-full bg-white/5 p-4 rounded-xl mb-4 outline-none">
             <button onclick="createGrp()" class="w-full bg-blue-600 p-4 rounded-xl font-bold">Создать</button>
+            <button onclick="closeM('m-grp')" class="w-full mt-2 opacity-50">Отмена</button>
         </div>
     </div>
 
     <div id="call-ui" class="modal">
-        <div class="text-center text-white">
-            <div class="w-32 h-32 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse text-4xl">📞</div>
-            <h2 id="c-caller" class="text-3xl font-bold mb-10">Входящий...</h2>
-            <div class="flex gap-12 justify-center">
-                <button onclick="ans(false)" class="bg-red-500 p-8 rounded-full"><i data-lucide="phone-off"></i></button>
-                <button onclick="ans(true)" class="bg-green-500 p-8 rounded-full"><i data-lucide="phone"></i></button>
+        <div class="text-center">
+            <div class="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse text-3xl">📞</div>
+            <h2 id="c-name" class="text-2xl font-bold mb-12">Входящий звонок...</h2>
+            <div class="flex gap-10">
+                <button onclick="endC()" class="bg-red-500 p-6 rounded-full"><i data-lucide="phone-off"></i></button>
+                <button onclick="endC()" class="bg-green-500 p-6 rounded-full"><i data-lucide="phone"></i></button>
             </div>
         </div>
     </div>
@@ -107,31 +128,42 @@
     <script>
         lucide.createIcons();
         const socket = io();
-        let cur = null, isG = false, myId = "{{ user._id }}", currentMembers = [];
+        let cur = null, isG = false, myId = "{{ user._id }}", members = [];
 
         function openM(id) { document.getElementById(id).classList.add('active'); }
         function closeM(id) { document.getElementById(id).classList.remove('active'); }
         function back() { document.body.classList.remove('chat-active'); }
-        function togglePanel() { document.getElementById('emoji-panel').classList.toggle('hidden'); }
+        function openE() { document.getElementById('emoji-p').classList.toggle('hidden'); }
 
         async function createGrp() {
             const t = document.getElementById('gt').value;
-            await fetch('/api/groups', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({t:t})});
+            if(t) { await fetch('/api/groups', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({t:t})}); location.reload(); }
+        }
+
+        async function saveSet() {
+            const d = { name: document.getElementById('set-n').value, bio: document.getElementById('set-b').value, theme: document.body.classList.contains('dark') ? 'dark' : 'light' };
+            await fetch('/api/update_profile', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});
             location.reload();
+        }
+
+        async function upAv(el) {
+            const fd = new FormData(); fd.append('file', el.files[0]); fd.append('type', 'avatar');
+            const r = await fetch('/api/upload', {method:'POST', body:fd});
+            const d = await r.json(); document.getElementById('set-av').src = d.url;
         }
 
         async function load() {
             const r = await fetch('/api/groups');
-            const gs = await r.json();
-            document.getElementById('chat-list').innerHTML = gs.map(g => `
-                <div onclick="openChat('${g._id}', '${g.title}', 'group', ${g.m_count}, '${JSON.stringify(g.member_details).replace(/'/g, "&apos;")}')" class="p-4 glass rounded-2xl mb-2 cursor-pointer hover:bg-blue-500/10">
+            const data = await r.json();
+            document.getElementById('chat-list').innerHTML = data.map(g => `
+                <div onclick="openChat('${g._id}', '${g.title}', 'group', ${g.m_count}, '${JSON.stringify(g.member_details).replace(/'/g, "&apos;")}')" class="p-4 glass rounded-2xl mb-2 cursor-pointer hover:bg-blue-500/5 transition-all">
                     <p class="font-bold text-sm"># ${g.title}</p>
-                    <p class="text-[10px] opacity-50">${g.m_count} участников</p>
+                    <p class="text-[10px] opacity-40">${g.m_count} участников</p>
                 </div>`).join('');
         }
 
-        function openChat(id, title, type, count, membersJSON) {
-            cur = id; isG = type==='group';
+        async function openChat(id, title, type, count, mJSON) {
+            cur = id; isG = type === 'group';
             document.body.classList.add('chat-active');
             document.getElementById('r-title').innerText = title;
             document.getElementById('r-status').innerText = isG ? `${count} участников` : 'был(а) недавно';
@@ -139,55 +171,63 @@
             document.getElementById('call-btn').style.display = isG ? 'none' : 'block';
             
             if(isG) {
-                currentMembers = JSON.parse(membersJSON);
-                document.getElementById('member-list').innerHTML = currentMembers.map(m => `
+                members = JSON.parse(mJSON);
+                document.getElementById('inf-list').innerHTML = members.map(m => `
                     <div class="flex items-center gap-3">
                         <img src="${m.av}" class="w-8 h-8 rounded-full">
-                        <div><p class="text-sm font-bold">${m.name}</p><p class="text-[9px] opacity-50">@${m.username}</p></div>
+                        <div><p class="text-sm font-bold">${m.name}</p><p class="text-[9px] opacity-40">@${m.username}</p></div>
                     </div>`).join('');
             }
             socket.emit('join', {room: id});
+            const r = await fetch(`/api/history/${id}`);
+            (await r.json()).forEach(render);
         }
 
         function sendMsg() {
             const t = document.getElementById('min').value;
-            if(t && cur) { socket.emit('msg', {room: cur, txt: t, av: "{{ user.av }}"}); document.getElementById('min').value = ''; }
+            if(t && cur) { socket.emit('msg', {room: cur, txt: t}); document.getElementById('min').value = ''; }
         }
-
-        socket.on('new_msg', m => {
-            if(m.room === cur) render(m);
-            if(m.sid !== myId) { document.getElementById('snd-msg').play(); }
-        });
 
         function render(m) {
             const me = m.sid === myId;
-            let content = `<p class="text-sm">${m.txt || ''}</p>`;
-            if(m.type === 'circle') content = `<video src="${m.url}" class="circle-msg" autoplay loop muted></video>`;
-            if(m.type === 'audio') content = `<audio src="${m.url}" controls class="w-48"></audio>`;
-            if(m.type === 'sticker') content = `<span class="text-5xl">${m.txt}</span>`;
+            let c = `<p class="text-sm">${m.txt || ''}</p>`;
+            if(m.type === 'circle') c = `<video src="${m.url}" class="circle-vid" autoplay loop muted></video>`;
+            if(m.type === 'sticker') c = `<span class="text-5xl">${m.txt}</span>`;
+            if(m.type === 'file') c = `<a href="${m.url}" download class="text-blue-400 flex gap-2"><i data-lucide="file"></i> Файл</a>`;
 
             const h = `<div class="flex flex-col ${me?'items-end':'items-start'} group">
-                <div class="${me?'bg-blue-600 text-white rounded-2xl rounded-br-none':'bg-slate-800 rounded-2xl rounded-bl-none'} p-3 max-w-[80%] shadow-lg relative">
-                    ${!me && isG ? `<p class="text-[9px] font-bold text-blue-400 mb-1">${m.name}</p>`:''}
-                    ${content}
-                    <div class="flex gap-1 mt-1 opacity-50 text-[10px]">
-                        <button onclick="react('${m._id}', '❤️')">❤️</button>
-                    </div>
+                <div class="${me?'msg-out shadow-blue-500/20':'msg-in'} p-3 max-w-[85%] shadow-lg relative">
+                    ${!me && isG ? `<p class="text-[9px] font-black text-blue-400 mb-1">${m.name}</p>` : ''}
+                    ${c}
+                    <button onclick="delM('${m._id}')" class="hidden group-hover:block absolute -top-2 -right-2 bg-red-500 p-1 rounded-full text-[8px]">✕</button>
                 </div>
+                <p class="text-[8px] opacity-30 mt-1">${new Date(m.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
             </div>`;
             document.getElementById('win').insertAdjacentHTML('beforeend', h);
             document.getElementById('win').scrollTop = document.getElementById('win').scrollHeight;
+            lucide.createIcons();
         }
 
-        function sendSticker(s) { socket.emit('msg', {room: cur, txt: s, type: 'sticker', av: "{{ user.av }}"}); togglePanel(); }
+        // Печатает...
+        document.getElementById('min').oninput = () => {
+            socket.emit('typing', {room: cur, st: true, is_g: isG});
+            clearTimeout(window.t_to);
+            window.t_to = setTimeout(() => socket.emit('typing', {room: cur, st: false, is_g: isG}), 2000);
+        };
 
-        // ЗВОНКИ
-        function initCall() { socket.emit('call_init', {room: cur}); }
-        socket.on('incoming_call', d => {
-            document.getElementById('c-caller').innerText = d.from;
-            openM('call-ui'); document.getElementById('snd-call').play();
+        socket.on('is_typing', d => {
+            const b = document.getElementById('t-box'), s = document.getElementById('r-status'), n = document.getElementById('t-name');
+            if(d.room === cur && d.st) { s.classList.add('hidden'); b.classList.remove('hidden'); n.innerText = d.is_g ? d.name : 'печатает'; }
+            else { b.classList.add('hidden'); s.classList.remove('hidden'); }
         });
-        function ans(v) { closeM('call-ui'); document.getElementById('snd-call').pause(); }
+
+        socket.on('new_msg', m => { if(m.room === cur) render(m); if(m.sid !== myId) document.getElementById('snd-msg').play(); });
+        socket.on('incoming_call', d => { document.getElementById('c-name').innerText = d.from; openM('call-ui'); document.getElementById('snd-call').play(); });
+        function endC() { closeM('call-ui'); document.getElementById('snd-call').pause(); }
+        function initCall() { socket.emit('call_init', {room: cur}); }
+        function delM(mid) { socket.emit('del_msg', {mid: mid, room: cur}); }
+        socket.on('msg_deleted', mid => location.reload());
+        function sendSticker(s) { socket.emit('msg', {room: cur, txt: s, type: 'sticker'}); openE(); }
 
         load();
     </script>

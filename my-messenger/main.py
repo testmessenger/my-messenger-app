@@ -1,7 +1,7 @@
-import eventlet
-eventlet.monkey_patch()  # Это должно быть ПЕРВОЙ строкой кода
-
 import os
+from gevent import monkey
+monkey.patch_all() # Решает проблему с блокирующими функциями раз и навсегда
+
 import datetime
 from flask import Flask, render_template, request, session, redirect, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -11,15 +11,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_FULL_STABLE_2026'
+app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_CORE_STABLE_2026'
 
-# --- ИСПРАВЛЕНИЕ ПУТЕЙ (RENDER FIX) ---
+# --- СИСТЕМА ФАЙЛОВ (RENDER FIX) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_PATH = os.path.join(BASE_DIR, 'static', 'uploads')
-
 if os.path.exists(UPLOAD_PATH) and not os.path.isdir(UPLOAD_PATH):
     os.remove(UPLOAD_PATH)
-
 os.makedirs(UPLOAD_PATH, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_PATH
 
@@ -27,8 +25,8 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_PATH
 client = MongoClient("mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true")
 db = client['messenger_db']
 
-# Инициализация SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', max_http_buffer_size=100000000)
+# Инициализация сокетов через Gevent
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', max_http_buffer_size=100000000)
 
 online_users = {} # sid: uid
 
@@ -45,7 +43,7 @@ def get_u():
         return db.users.find_one({"_id": ObjectId(session['user_id'])})
     except: return None
 
-# --- РОУТЫ (АВТОРИЗАЦИЯ, ПРОФИЛЬ, ПОИСК) ---
+# --- API МАРШРУТЫ ---
 
 @app.route('/')
 def index():
@@ -75,7 +73,7 @@ def handle_auth():
         else: return jsonify({"e": "Ошибка входа"}), 401
     return jsonify({"s": "ok"})
 
-@app.route('/api/search')
+@app.route('/api/search') # Глобальный поиск
 def search():
     q = request.args.get('q', '').replace('@', '')
     if not q: return jsonify({"users": [], "groups": []})
@@ -83,57 +81,25 @@ def search():
     groups = list(db.groups.find({"title": {"$regex": q, "$options": "i"}}))
     return jsonify({"users": fix(users), "groups": fix(groups)})
 
-@app.route('/api/profile/update', methods=['POST'])
-def update_profile():
-    u = get_u()
-    if not u: return "401", 401
-    d = request.json
-    db.users.update_one({"_id": u['_id']}, {"$set": {
-        "name": d.get('name'), "bio": d.get('bio'), 
-        "theme": d.get('theme'), "av": d.get('av')
-    }})
-    return jsonify({"s": "ok"})
-
-# --- ГРУППЫ И АДМИНКА ---
-
 @app.route('/api/groups', methods=['GET', 'POST'])
 def handle_groups():
     u = get_u()
     if not u: return "401", 401
     if request.method == 'POST':
-        db.groups.insert_one({
+        gid = db.groups.insert_one({
             "title": request.json['t'], "owner": str(u['_id']),
             "admins": [str(u['_id'])], "members": [str(u['_id'])],
             "muted": [], "banned": []
-        })
-        return jsonify({"s": "ok"})
+        }).inserted_id
+        return jsonify({"s": "ok", "id": str(gid)})
     
     gs = list(db.groups.find({"members": str(u['_id'])}))
     for g in gs:
-        g['m_count'] = len(g['members'])
-        # Получаем данные всех участников для списка
+        g['m_count'] = len(g['members']) # Число участников
+        # Статус каждого участника для списка
         m_list = list(db.users.find({"_id": {"$in": [ObjectId(m) for m in g['members']]}}, {"pw":0}))
         g['member_details'] = fix(m_list)
     return jsonify(fix(gs))
-
-@app.route('/api/groups/admin_control', methods=['POST'])
-def admin_control():
-    u = get_u()
-    d = request.json # gid, target_uid, action
-    g = db.groups.find_one({"_id": ObjectId(d['gid'])})
-    if not g or str(u['_id']) not in g['admins']: return "Error", 403
-    
-    if d['action'] == 'ban':
-        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"banned": d['target_uid']}, "$pull": {"members": d['target_uid']}})
-    elif d['action'] == 'mute':
-        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"muted": d['target_uid']}})
-    elif d['action'] == 'promote':
-        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"admins": d['target_uid']}})
-    elif d['action'] == 'delete' and g['owner'] == str(u['_id']):
-        db.groups.delete_one({"_id": g['_id']})
-        db.messages.delete_many({"room": d['gid']})
-        
-    return jsonify({"s": "ok"})
 
 @app.route('/api/upload', methods=['POST'])
 def upload():
@@ -145,11 +111,11 @@ def upload():
         return jsonify({"url": f"/static/uploads/{fname}"})
     return "Error", 400
 
-@app.route('/api/history/<rid>')
+@app.route('/api/history/<rid>') # История 50 сообщений
 def history(rid):
     return jsonify(fix(list(db.messages.find({"room": rid}).sort("ts", -1).limit(50))[::-1]))
 
-# --- SOCKETS (СТАТУСЫ, ПЕЧАТАЕТ, ЗВОНКИ, РЕАКЦИИ) ---
+# --- SOCKETS (ЛОГИКА В РЕАЛЬНОМ ВРЕМЕНИ) ---
 
 @socketio.on('connect')
 def on_connect():
@@ -165,19 +131,20 @@ def on_disconnect():
     uid = online_users.get(request.sid)
     if uid:
         last = datetime.datetime.now().strftime("%H:%M")
-        db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"is_online": False, "last_seen": f"был(а) в {last}"}})
-        emit('status_ev', {"uid": uid, "on": False, "last": f"был(а) в {last}"}, broadcast=True)
+        status_text = f"был(а) недавно в {last}"
+        db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"is_online": False, "last_seen": status_text}})
+        emit('status_ev', {"uid": uid, "on": False, "last": status_text}, broadcast=True)
         online_users.pop(request.sid, None)
 
 @socketio.on('join')
 def on_join(d): 
     join_room(d['room'])
 
-@socketio.on('typing')
+@socketio.on('typing') # ПЕЧАТАЕТ: Группа vs ЛС
 def on_typing(d):
     u = get_u()
     if u:
-        # В группе передаем имя, в ЛС — просто флаг
+        # d['is_g'] - флаг группы с фронтенда
         emit('typing_ev', {
             "name": u['name'], "room": d['room'], 
             "st": d['st'], "is_g": d['is_g']
@@ -189,7 +156,7 @@ def on_msg(d):
     if not u: return
     
     # ПРОВЕРКА БАНА И МУТА
-    if len(d['room']) == 24: # ID группы
+    if len(d['room']) == 24: # Формат ObjectId для групп
         g = db.groups.find_one({"_id": ObjectId(d['room'])})
         if g:
             if str(u['_id']) in g.get('banned', []): return
@@ -205,33 +172,30 @@ def on_msg(d):
     m['_id'] = str(db.messages.insert_one(m).inserted_id)
     emit('new_msg', m, room=d['room'])
 
-@socketio.on('react')
-def on_react(d): # mid, emoji, uid, room
-    db.messages.update_one({"_id": ObjectId(d['mid'])}, {"$set": {f"reacts.{d['uid']}": d['emoji']}})
-    emit('update_reacts', d, room=d['room'])
-
-@socketio.on('call_init')
+@socketio.on('call_init') # ЗВОНКИ
 def on_call(d):
     u = get_u()
     if u:
-        emit('incoming_call', {"from": u['name'], "from_av": u['av'], "room": d['room']}, room=d['room'], include_self=False)
+        emit('incoming_call', {
+            "from": u['name'], "av": u['av'], 
+            "room": d['room'], "uid": str(u['_id'])
+        }, room=d['room'], include_self=False)
 
-@socketio.on('delete_msg')
+@socketio.on('delete_msg') # УДАЛЕНИЕ СООБЩЕНИЙ (АВТОР ИЛИ АДМИН)
 def on_delete(d):
     u = get_u()
     msg = db.messages.find_one({"_id": ObjectId(d['mid'])})
     if not msg: return
     
-    can_del = str(u['_id']) == msg['sid'] # Автор
-    if not can_del and len(d['room']) == 24: # Проверка прав админа в группе
+    is_admin = False
+    if len(d['room']) == 24:
         g = db.groups.find_one({"_id": ObjectId(d['room'])})
-        if g and str(u['_id']) in g.get('admins', []): can_del = True
+        if g and str(u['_id']) in g.get('admins', []): is_admin = True
         
-    if can_del:
+    if str(u['_id']) == msg['sid'] or is_admin:
         db.messages.delete_one({"_id": ObjectId(d['mid'])})
         emit('msg_deleted', d['mid'], room=d['room'])
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
-    # ПРЯМОЙ ЗАПУСК ДЛЯ СТАБИЛЬНОСТИ НА RENDER
     socketio.run(app, host='0.0.0.0', port=port)

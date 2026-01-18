@@ -1,12 +1,35 @@
 <!DOCTYPE html>
-<html>
-<head><title>Nexus | Auth</title><meta charset="UTF-8"></head>
-<body style="background:#0f172a; color:white; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
-    <form action="/api/register" method="post" style="display:flex; flex-direction:column; gap:10px; width:300px;">
-        <h2>Nexus Auth</h2>
-        <input name="username" placeholder="Username" required style="padding:10px; border-radius:5px;">
-        <input name="password" type="password" placeholder="Password" required style="padding:10px; border-radius:5px;">
-        <button type="submit" style="padding:10px; background:#3b82f6; color:white; border:none; border-radius:5px;">Войти / Регистрация</button>
-    </form>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus - Вход</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#020617] text-white flex items-center justify-center h-screen">
+    <div class="bg-[#0f172a] p-8 rounded-3xl border border-slate-800 w-full max-w-sm">
+        <h1 class="text-3xl font-black text-blue-500 italic mb-6 text-center">NEXUS</h1>
+        <div id="auth-form" class="space-y-4">
+            <input id="username" type="text" placeholder="Логин" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl outline-none focus:border-blue-500 transition">
+            <input id="password" type="password" placeholder="Пароль" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl outline-none focus:border-blue-500 transition">
+            <button onclick="handleAuth('login')" class="w-full bg-blue-600 py-4 rounded-xl font-bold hover:bg-blue-700 transition">ВОЙТИ</button>
+            <button onclick="handleAuth('register')" class="w-full text-blue-400 text-sm font-bold">СОЗДАТЬ АККАУНТ</button>
+        </div>
+    </div>
+
+    <script>
+        async function handleAuth(type) {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const res = await fetch(`/api/${type}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+            if (data.status === 'ok') window.location.href = '/';
+            else alert(data.error);
+        }
+    </script>
 </body>
 </html>

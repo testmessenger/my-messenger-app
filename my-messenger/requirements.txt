@@ -2,6 +2,5 @@ flask
 flask-socketio
 gevent
 gevent-websocket
-pymongo
-werkzeug
+pymongo[srv]
 gunicorn

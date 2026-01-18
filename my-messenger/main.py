@@ -11,7 +11,7 @@ from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'nexus_full_project_fixed_2026'
+app.config['SECRET_KEY'] = 'nexus_infinity_full_core_2026'
 
 # --- ПОДКЛЮЧЕНИЕ К БАЗЕ ДАННЫХ ---
 MONGO_URI = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
@@ -22,14 +22,18 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 def get_user():
     if 'user_id' in session:
-        return db.users.find_one({"_id": ObjectId(session['user_id'])})
+        try:
+            return db.users.find_one({"_id": ObjectId(session['user_id'])})
+        except:
+            return None
     return None
 
-# --- МАРШРУТЫ (ROUTES) ---
+# --- ГЛАВНЫЕ СТРАНИЦЫ ---
 @app.route('/')
 def index():
     user = get_user()
-    if not user: return redirect(url_for('auth'))
+    if not user:
+        return redirect(url_for('auth'))
     return render_template('index.html', user=user)
 
 @app.route('/auth')
@@ -48,12 +52,13 @@ def manifest():
         "theme_color": "#3b82f6"
     })
 
-# --- API АВТОРИЗАЦИИ ---
-@app.route('/api/auth/register', methods=['POST'])
+# --- API АВТОРИЗАЦИИ (ИСПРАВЛЯЕТ ТВОЮ ОШИБКУ 404) ---
+@app.route('/api/register', methods=['POST'])
 def register():
     data = request.json
     if db.users.find_one({"username": data['username']}):
         return jsonify({"error": "Пользователь уже существует"}), 400
+    
     user_id = db.users.insert_one({
         "username": data['username'],
         "password": generate_password_hash(data['password']),
@@ -61,10 +66,11 @@ def register():
         "avatar": f"https://ui-avatars.com/api/?name={data['username']}&background=random",
         "bio": "Я использую Nexus"
     }).inserted_id
+    
     session['user_id'] = str(user_id)
     return jsonify({"status": "ok"})
 
-@app.route('/api/auth/login', methods=['POST'])
+@app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
     user = db.users.find_one({"username": data['username']})
@@ -73,7 +79,12 @@ def login():
         return jsonify({"status": "ok"})
     return jsonify({"error": "Неверный логин или пароль"}), 401
 
-# --- API ФУНКЦИЙ (ПОИСК, ГРУППЫ, ПРОФИЛЬ) ---
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('auth'))
+
+# --- API ФУНКЦИЙ ---
 @app.route('/api/search')
 def search():
     q = request.args.get('q', '')
@@ -85,7 +96,7 @@ def search():
 @app.route('/api/profile/save', methods=['POST'])
 def save_profile():
     user = get_user()
-    if not user: return "401", 401
+    if not user: return jsonify({"error": "Unauthorized"}), 401
     db.users.update_one({"_id": user['_id']}, {"$set": {
         "display_name": request.json['name'],
         "bio": request.json['bio']
@@ -97,7 +108,7 @@ def create_group():
     user = get_user()
     gid = db.groups.insert_one({
         "title": request.json['title'],
-        "owner_id": str(user['_id']), # ТЫ ТЕПЕРЬ ВЛАДЕЛЕЦ
+        "owner_id": str(user['_id']),
         "members": [str(user['_id'])],
         "admins": [str(user['_id'])]
     }).inserted_id
@@ -106,7 +117,7 @@ def create_group():
 @app.route('/api/my_chats')
 def get_my_chats():
     user = get_user()
-    if not user: return "[]"
+    if not user: return jsonify([])
     groups = list(db.groups.find({"members": str(user['_id'])}))
     for g in groups: g['_id'] = str(g['_id'])
     return jsonify(groups)
@@ -117,30 +128,36 @@ def upload():
     encoded = base64.b64encode(file.read()).decode('utf-8')
     return jsonify({"url": f"data:{file.content_type};base64,{encoded}"})
 
-# --- SOCKET.IO (ЗВОНКИ И СООБЩЕНИЯ) ---
+# --- SOCKET.IO ---
 @socketio.on('join_room')
-def handle_join(data):
+def on_join(data):
     join_room(data['room'])
 
 @socketio.on('send_msg')
 def handle_msg(data):
     user = get_user()
+    if not user: return
     msg = {
-        "room": data['room'], "sender_id": str(user['_id']),
-        "sender_name": user['display_name'], "sender_avatar": user['avatar'],
-        "text": data.get('text', ''), "type": data.get('type', 'text'),
-        "file_url": data.get('file_url', ''), "ts": datetime.datetime.utcnow().isoformat()
+        "room": data['room'],
+        "sender_id": str(user['_id']),
+        "sender_name": user['display_name'],
+        "sender_avatar": user['avatar'],
+        "text": data.get('text', ''),
+        "type": data.get('type', 'text'),
+        "file_url": data.get('file_url', ''),
+        "ts": datetime.datetime.utcnow().isoformat()
     }
     res = db.messages.insert_one(msg)
     msg['_id'] = str(res.inserted_id)
     emit('new_message', msg, room=data['room'])
-    emit('notify', {"room": data['room'], "title": user['display_name'], "body": data.get('text', 'Файл')}, room=data['room'], include_self=False)
+    emit('notify', {"room": data['room']}, room=data['room'], include_self=False)
 
 @socketio.on('delete_msg')
 def handle_delete(data):
     db.messages.delete_one({"_id": ObjectId(data['msg_id'])})
     emit('msg_deleted', data['msg_id'], room=data['room'])
 
+# WebRTC (Звонки)
 @socketio.on('call_user')
 def call(data): emit('incoming_call', data, room=data['room'], include_self=False)
 @socketio.on('answer_call')

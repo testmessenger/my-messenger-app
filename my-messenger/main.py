@@ -1,22 +1,20 @@
 import eventlet
 eventlet.monkey_patch()
-import datetime, os, base64
 from flask import Flask, render_template, request, session, redirect, jsonify
 from flask_socketio import SocketIO, emit, join_room
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
+import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'NEXUS_ULTRA_2026_CORE'
+app.config['SECRET_KEY'] = 'NEXUS_ULTRA_CORE_2026'
 
-# БД: adminbase:admin123
 client = MongoClient("mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true")
 db = client['messenger_db']
 socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=100000000)
 
-# Хелпер для очистки данных от ObjectId (решает твою ошибку)
-def clean(d):
+def fix(d):
     if not d: return d
     if isinstance(d, list):
         for i in d: i['_id'] = str(i['_id'])
@@ -30,12 +28,11 @@ def get_u():
     return u
 
 @app.route('/')
-def index(): return render_template('index.html', user=clean(get_u())) if 'user_id' in session else redirect('/auth')
-
+def index(): return render_template('index.html', user=fix(get_u())) if 'user_id' in session else redirect('/auth')
 @app.route('/auth')
 def auth_pg(): return render_template('auth.html')
 
-# --- СИСТЕМА АВТОРИЗАЦИИ ---
+# --- АВТОРИЗАЦИЯ И ПРОФИЛЬ ---
 @app.route('/api/auth', methods=['POST'])
 def handle_auth():
     d = request.json
@@ -46,29 +43,24 @@ def handle_auth():
     else:
         u = db.users.find_one({"username": d['username']})
         if u and check_password_hash(u['pw'], d['pw']): session['user_id'] = str(u['_id'])
-        else: return jsonify({"e": "Ошибка"}), 401
+        else: return jsonify({"e": "Ошибка входа"}), 401
     return jsonify({"s": "ok"})
 
-# --- ПРОФИЛЬ И КАСТОМИЗАЦИЯ ---
-@app.route('/api/user/save', methods=['POST'])
-def save_profile():
+@app.route('/api/profile/update', methods=['POST'])
+def update_profile():
     db.users.update_one({"_id": get_u()['_id']}, {"$set": request.json})
     return "ok"
 
-@app.route('/api/search_user/<query>')
-def search_user(query):
-    users = list(db.users.find({"username": {"$regex": query, "$options": "i"}}, {"pw":0}))
-    return jsonify(clean(users))
+@app.route('/api/search_global/<q>')
+def search_global(q):
+    return jsonify(fix(list(db.users.find({"username": {"$regex": q, "$options": "i"}}, {"pw":0}))))
 
-# --- ГРУППЫ И АДМИНИСТРИРОВАНИЕ ---
+# --- ГРУППЫ И АДМИНКА ---
 @app.route('/api/groups', methods=['GET', 'POST', 'DELETE'])
 def manage_groups():
     u = get_u()
     if request.method == 'POST':
-        gid = db.groups.insert_one({
-            "title": request.json['t'], "owner": str(u['_id']), "admins": [str(u['_id'])],
-            "members": [str(u['_id'])], "banned": [], "muted": []
-        }).inserted_id
+        gid = db.groups.insert_one({"title": request.json['t'], "owner": str(u['_id']), "admins": [str(u['_id'])], "members": [str(u['_id'])], "banned": [], "muted": []}).inserted_id
         return jsonify({"id": str(gid)})
     if request.method == 'DELETE':
         g = db.groups.find_one({"_id": ObjectId(request.json['gid'])})
@@ -77,28 +69,22 @@ def manage_groups():
             db.messages.delete_many({"room": str(g['_id'])})
         return "ok"
     gs = list(db.groups.find({"members": str(u['_id'])}))
-    return jsonify(clean(gs))
+    return jsonify(fix(gs))
 
 @app.route('/api/admin_action', methods=['POST'])
-def admin_action():
-    u = get_u(); d = request.json
-    g = db.groups.find_one({"_id": ObjectId(d['gid'])})
-    if str(u['_id']) not in g['admins']: return "No rights", 403
-    if d['act'] == 'ban':
-        db.groups.update_one({"_id": g['_id']}, {"$pull": {"members": d['target']}, "$push": {"banned": d['target']}})
-    elif d['act'] == 'mute':
-        db.groups.update_one({"_id": g['_id']}, {"$push": {"muted": d['target']}})
-    elif d['act'] == 'promote' and g['owner'] == str(u['_id']):
-        db.groups.update_one({"_id": g['_id']}, {"$push": {"admins": d['target']}})
+def admin_act():
+    u = get_u(); d = request.json; g = db.groups.find_one({"_id": ObjectId(d['gid'])})
+    if str(u['_id']) not in g['admins']: return "Error", 403
+    if d['act'] == 'ban': db.groups.update_one({"_id": g['_id']}, {"$pull": {"members": d['target']}, "$push": {"banned": d['target']}})
+    if d['act'] == 'mute': db.groups.update_one({"_id": g['_id']}, {"$push": {"muted": d['target']}})
+    if d['act'] == 'promote' and g['owner'] == str(u['_id']): db.groups.update_one({"_id": g['_id']}, {"$push": {"admins": d['target']}})
     return "ok"
 
-# --- ИСТОРИЯ И МУЛЬТИМЕДИА ---
 @app.route('/api/history/<rid>')
 def get_hist(rid):
-    ms = list(db.messages.find({"room": rid}).sort("ts", -1).limit(50))
-    return jsonify(clean(ms[::-1]))
+    return jsonify(fix(list(db.messages.find({"room": rid}).sort("ts", -1).limit(50))[::-1]))
 
-# --- SOCKETS: ТАЙПИНГ, ЗВОНКИ, РЕАКЦИИ ---
+# --- SOCKETS (ГОЛОСОВЫЕ, ПЕЧАТАЕТ, РЕАКЦИИ) ---
 @socketio.on('join')
 def on_join(d): join_room(d['room'])
 
@@ -110,24 +96,22 @@ def on_type(d):
 @socketio.on('msg')
 def on_msg(d):
     u = get_u()
-    if len(d['room']) == 24: # Проверка мута в группе
+    if len(d['room']) == 24:
         g = db.groups.find_one({"_id": ObjectId(d['room'])})
-        if str(u['_id']) in g.get('muted', []):
-            emit('error', 'Вы в муте')
-            return
-    msg = {
-        "room": d['room'], "sid": str(u['_id']), "name": u['name'], "av": u['av'],
-        "txt": d.get('txt'), "type": d.get('type', 'text'), "url": d.get('url'),
-        "reacts": {}, "ts": datetime.datetime.utcnow().isoformat()
-    }
-    mid = db.messages.insert_one(msg).inserted_id
-    msg['_id'] = str(mid)
+        if str(u['_id']) in g.get('muted', []): return
+    msg = {"room": d['room'], "sid": str(u['_id']), "name": u['name'], "av": u['av'], "txt": d.get('txt'), "type": d.get('type', 'text'), "url": d.get('url'), "reacts": {}, "ts": datetime.datetime.utcnow().isoformat()}
+    msg['_id'] = str(db.messages.insert_one(msg).inserted_id)
     emit('new_msg', msg, room=d['room'])
 
-@socketio.on('call_signal')
+@socketio.on('call_init')
 def on_call(d):
     u = get_u()
     emit('incoming_call', {"from": u['name'], "room": d['room']}, room=d['room'], include_self=False)
+
+@socketio.on('react')
+def on_react(d):
+    db.messages.update_one({"_id": ObjectId(d['mid'])}, {"$inc": {f"reacts.{d['emoji']}": 1}})
+    emit('update_react', d, room=d['room'])
 
 @socketio.on('del_msg')
 def on_del(d):

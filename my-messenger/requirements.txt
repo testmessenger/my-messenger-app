@@ -1,6 +1,5 @@
 flask
 flask-socketio
-pymongo[srv]
-gevent
-gevent-websocket
+pymongo
+eventlet
 gunicorn

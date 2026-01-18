@@ -9,288 +9,230 @@
     <style>
         :root {
             --bg: #0f111a; --panel: #1a1d29; --text: #ffffff; --accent: #7289da;
-            --msg-in: #2b2e3f; --msg-out: #3e4d8c; --mute-bg: rgba(0,0,0,0.8);
+            --msg-in: #2b2e3f; --msg-out: #3e4d8c; --mute: rgba(0,0,0,0.8);
         }
         .light-theme {
             --bg: #f0f2f5; --panel: #ffffff; --text: #1c1e21; --accent: #0084ff;
-            --msg-in: #e4e6eb; --msg-out: #0084ff; --text-out: #fff;
+            --msg-in: #e4e6eb; --msg-out: #0084ff;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-        body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; transition: 0.3s; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; transition: 0.3s; }
 
-        /* --- Layout --- */
-        .app-container { display: flex; height: 100vh; }
-        .sidebar { width: 350px; background: var(--panel); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; }
-        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+        /* Адаптивный Layout */
+        .sidebar { width: 350px; background: var(--panel); border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; transition: 0.4s ease; z-index: 10; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; }
 
-        /* --- Header & Search --- */
-        .header { padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .search-box { padding: 10px; }
-        .search-box input { width: 100%; padding: 10px; border-radius: 8px; border: none; background: var(--bg); color: var(--text); }
-
-        /* --- Chat List --- */
-        #chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { padding: 15px; display: flex; align-items: center; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.2s; }
-        .chat-item:hover { background: rgba(255,255,255,0.05); }
-        .chat-item img { width: 50px; height: 50px; border-radius: 50%; margin-right: 15px; object-fit: cover; }
-        .chat-info { flex: 1; }
-        .chat-info h4 { font-size: 16px; margin-bottom: 4px; }
-        .chat-info p { font-size: 13px; opacity: 0.6; }
-
-        /* --- Messages Area --- */
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 70%; padding: 10px 15px; border-radius: 15px; position: relative; word-wrap: break-word; }
-        .msg.in { align-self: flex-start; background: var(--msg-in); border-bottom-left-radius: 2px; }
-        .msg.out { align-self: flex-end; background: var(--msg-out); border-bottom-right-radius: 2px; color: var(--text-out); }
-        .msg-time { font-size: 10px; opacity: 0.5; display: block; text-align: right; margin-top: 5px; }
-        .delete-btn { position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; font-size: 10px; display: none; }
-        .msg:hover .delete-btn { display: block; }
-
-        /* --- Input Area --- */
-        .input-box { padding: 15px; background: var(--panel); display: flex; align-items: center; gap: 10px; }
-        .input-box input { flex: 1; padding: 12px; border-radius: 20px; border: none; background: var(--bg); color: var(--text); }
-        .mute-overlay { position: absolute; bottom: 0; width: 100%; height: 60px; background: var(--mute-bg); display: none; justify-content: center; align-items: center; color: #ff4d4d; font-weight: bold; z-index: 10; }
-
-        /* --- Modals & Overlays --- */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
-        .modal-content { background: var(--panel); padding: 30px; border-radius: 15px; width: 90%; max-width: 400px; text-align: center; }
-        
-        /* --- Calling UI --- */
-        #call-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
-        #call-overlay img { width: 120px; height: 120px; border-radius: 50%; margin-bottom: 20px; border: 3px solid var(--accent); }
-        .call-btns { display: flex; gap: 40px; margin-top: 30px; }
-        .btn-call { width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer; font-size: 24px; color: white; }
-        .accept { background: #4caf50; }
-        .reject { background: #f44336; }
-
-        /* --- Adaptive --- */
         @media (max-width: 768px) {
-            .sidebar { width: 100%; position: absolute; left: 0; top: 0; z-index: 50; }
-            .sidebar.hidden { display: none; }
+            .sidebar { position: fixed; inset: 0; width: 100%; }
+            .sidebar.hidden { transform: translateX(-100%); }
             .chat-area { width: 100%; }
         }
 
-        .typing-status { font-size: 12px; color: var(--accent); height: 15px; margin-bottom: 5px; }
+        /* Список чатов */
+        .chat-item { padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.02); }
+        .chat-item:hover { background: rgba(255,255,255,0.03); }
+        .chat-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); }
+
+        /* Сообщения */
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 10px 14px; border-radius: 18px; position: relative; font-size: 15px; animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .msg.in { align-self: flex-start; background: var(--msg-in); border-bottom-left-radius: 4px; }
+        .msg.out { align-self: flex-end; background: var(--msg-out); border-bottom-right-radius: 4px; }
+        .msg small { display: block; font-weight: bold; font-size: 11px; margin-bottom: 3px; color: var(--accent); }
+        .msg .del-msg { position: absolute; right: -20px; top: 50%; transform: translateY(-50%); color: #ff4d4d; opacity: 0; cursor: pointer; }
+        .msg:hover .del-msg { opacity: 1; }
+
+        /* Ввод */
+        .input-box { padding: 10px; background: var(--panel); display: flex; align-items: center; gap: 12px; }
+        .input-box input { flex: 1; padding: 12px 18px; border-radius: 25px; border: none; background: var(--bg); color: var(--text); outline: none; }
+        .typing-status { font-size: 12px; color: var(--accent); height: 18px; padding: 0 15px; margin-bottom: 5px; font-style: italic; }
+
+        /* Звонки */
+        #call-overlay { display: none; position: fixed; inset: 0; background: #000; z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
+        .call-btns { display: flex; gap: 40px; margin-top: 50px; }
+        .btn-call { width: 70px; height: 70px; border-radius: 50%; border: none; font-size: 28px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        
+        /* Модалки */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+        .modal-content { background: var(--panel); width: 100%; max-width: 400px; padding: 25px; border-radius: 20px; text-align: center; }
     </style>
 </head>
 <body class="{{ user.theme }}-theme">
 
-    <div class="app-container">
-        <div class="sidebar" id="sidebar">
-            <div class="header">
-                <img src="{{ user.av }}" id="my-avatar" style="width:40px; height:40px; border-radius:50%; cursor:pointer;" onclick="toggleProfile()">
-                <h3>Nexus</h3>
-                <i class="fas fa-plus-circle" style="cursor:pointer;" onclick="showCreateGroup()"></i>
+    <div class="sidebar" id="sidebar">
+        <div style="padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <img src="{{ user.av }}" style="width: 45px; height: 45px; border-radius: 50%;" onclick="toggleProfile()">
+            <h2 style="font-size: 20px;">Nexus</h2>
+            <i class="fas fa-plus-circle" style="font-size: 24px; cursor: pointer;" onclick="showCreateGroup()"></i>
+        </div>
+        <div id="chat-list" style="overflow-y: auto; flex: 1;"></div>
+    </div>
+
+    <div class="chat-area">
+        <div style="padding: 10px 15px; background: var(--panel); display: flex; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <i class="fas fa-arrow-left" id="back-btn" style="display: none; margin-right: 15px; font-size: 20px;" onclick="closeChat()"></i>
+            <div>
+                <h4 id="chat-title">Выберите чат</h4>
+                <p id="chat-status" style="font-size: 12px; opacity: 0.6;"></p>
             </div>
-            <div class="search-box">
-                <input type="text" id="global-search" placeholder="Поиск @юзеров или групп..." oninput="realtimeSearch()">
+            <div id="call-ui" style="margin-left: auto; display: none;">
+                <i class="fas fa-phone" onclick="initCall('audio')" style="margin-right: 20px;"></i>
+                <i class="fas fa-video" onclick="initCall('video')"></i>
             </div>
-            <div id="chat-list">
-                </div>
         </div>
 
-        <div class="chat-area">
-            <div class="header">
-                <div style="display:flex; align-items:center;">
-                    <i class="fas fa-arrow-left" id="back-btn" style="margin-right:15px; display:none;" onclick="closeChat()"></i>
-                    <div id="chat-header-info">
-                        <h4 id="current-chat-title">Выберите чат</h4>
-                        <p id="current-chat-status" style="font-size:12px; opacity:0.6;"></p>
-                    </div>
-                </div>
-                <div class="call-icons" style="display:none;" id="top-call-btns">
-                    <i class="fas fa-phone" onclick="initCall('audio')"></i>
-                    <i class="fas fa-video" style="margin-left:15px;" onclick="initCall('video')"></i>
-                </div>
-            </div>
+        <div id="messages"></div>
+        <div class="typing-status" id="typing-indicator"></div>
 
-            <div id="messages"></div>
-
-            <div class="typing-status" id="typing-indicator"></div>
-
-            <div class="mute-overlay" id="mute-alert">ВЫ В МУТЕ</div>
-            
-            <div class="input-box" id="input-container" style="display:none;">
-                <i class="fas fa-paperclip" onclick="triggerUpload()"></i>
-                <input type="text" id="msg-input" placeholder="Напишите сообщение...">
-                <i class="fas fa-microphone" id="voice-btn"></i>
-                <i class="fas fa-paper-plane" onclick="sendMsg()"></i>
-            </div>
+        <div class="input-box" id="input-ui" style="display: none;">
+            <i class="fas fa-paperclip" style="font-size: 20px;"></i>
+            <input type="text" id="msg-input" placeholder="Написать сообщение...">
+            <i class="fas fa-paper-plane" onclick="sendMsg()" style="color: var(--accent); font-size: 22px; cursor: pointer;"></i>
         </div>
     </div>
 
     <div id="call-overlay">
-        <img id="call-av" src="">
-        <h2 id="call-name">Звонок...</h2>
+        <img id="call-av" style="width: 130px; height: 130px; border-radius: 50%; border: 3px solid var(--accent);">
+        <h2 id="call-name" style="margin-top: 25px;">Входящий вызов...</h2>
         <div class="call-btns">
-            <button class="btn-call accept" onclick="answerCall()"><i class="fas fa-phone"></i></button>
-            <button class="btn-call reject" onclick="stopCall()"><i class="fas fa-phone-slash"></i></button>
+            <button class="btn-call" style="background: #2ecc71;" onclick="acceptCall()"><i class="fas fa-phone"></i></button>
+            <button class="btn-call" style="background: #e74c3c;" onclick="stopCall()"><i class="fas fa-phone-slash"></i></button>
         </div>
         <audio id="ringtone" src="/static/ringtone.mp3" loop></audio>
     </div>
-
-    <div id="profile-modal" class="modal">
-        <div class="modal-content">
-            <h3>Профиль</h3>
-            <img id="p-av" src="{{ user.av }}" style="width:100px; height:100px; border-radius:50%; margin: 15px 0;">
-            <input type="text" id="p-name" value="{{ user.name }}" class="search-box input">
-            <textarea id="p-bio" class="search-box input">{{ user.bio }}</textarea>
-            <p>ID: @{{ user.username }}</p>
-            <button onclick="changeTheme()">Сменить тему</button>
-            <button onclick="saveProfile()" style="background:var(--accent); color:white; border:none; padding:10px 20px; border-radius:5px; margin-top:10px;">Сохранить</button>
-            <button onclick="closeModals()">Закрыть</button>
-        </div>
-    </div>
-
-    <input type="file" id="file-input" style="display:none;" onchange="uploadFile(this)">
 
     <script>
         const socket = io();
         const myId = "{{ user._id }}";
         let currentRoom = null;
-        let isGroup = false;
+        let isG = false;
+        const msgSound = new Audio('/static/msg.mp3');
 
-        // --- Core Functions ---
+        // Уведомления
+        if (Notification.permission !== "granted") Notification.requestPermission();
+
         async function loadChats() {
-            const res = await fetch('/api/groups');
-            const groups = await res.json();
+            const r = await fetch('/api/groups');
+            const groups = await r.json();
             const list = document.getElementById('chat-list');
             list.innerHTML = '';
             groups.forEach(g => {
                 const item = document.createElement('div');
                 item.className = 'chat-item';
-                item.onclick = () => selectChat(g._id, g.title, true, g.member_details.length);
+                item.onclick = () => selectChat(g._id, g.title, true, g.member_list.length);
                 item.innerHTML = `
-                    <img src="/static/group.png">
-                    <div class="chat-info">
-                        <h4>${g.title}</h4>
-                        <p>${g.member_details.length} участников</p>
+                    <img src="/static/default.png">
+                    <div>
+                        <strong>${g.title}</strong><br>
+                        <small style="opacity:0.6">${g.member_list.length} участников</small>
                     </div>
                 `;
                 list.appendChild(item);
             });
         }
 
-        function selectChat(id, title, isG, mCount) {
+        function selectChat(id, title, isGroup, count) {
             currentRoom = id;
-            isGroup = isG;
-            document.getElementById('current-chat-title').innerText = title;
-            document.getElementById('current-chat-status').innerText = isG ? `${mCount} участников` : 'в сети';
-            document.getElementById('input-container').style.display = 'flex';
-            document.getElementById('top-call-btns').style.display = 'block';
+            isG = isGroup;
+            document.getElementById('chat-title').innerText = title;
+            document.getElementById('chat-status').innerText = isGroup ? `${count} участников` : "в сети";
+            document.getElementById('input-ui').style.display = 'flex';
+            document.getElementById('call-ui').style.display = 'block';
             document.getElementById('messages').innerHTML = '';
             
             socket.emit('join', { room: id });
-            loadHistory(id);
+            fetch(`/api/history/${id}`).then(r => r.json()).then(data => data.forEach(renderMsg));
 
-            if (window.innerWidth < 768) {
+            if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.add('hidden');
                 document.getElementById('back-btn').style.display = 'block';
             }
         }
 
-        async function loadHistory(rid) {
-            const res = await fetch(`/api/history/${rid}`);
-            const msgs = await res.json();
-            msgs.forEach(m => renderMsg(m));
-        }
-
         function renderMsg(m) {
-            const container = document.getElementById('messages');
+            const box = document.getElementById('messages');
             const div = document.createElement('div');
             div.className = `msg ${m.sid === myId ? 'out' : 'in'}`;
             div.id = `msg-${m._id}`;
-            
-            let content = `<small>${m.name}</small><br>${m.txt}`;
-            if (m.type === 'file') content += `<br><a href="${m.url}" target="_blank" style="color:cyan">📎 Файл</a>`;
-            
             div.innerHTML = `
-                ${content}
-                <span class="msg-time">${new Date(m.ts).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                <button class="delete-btn" onclick="deleteMsg('${m._id}')">✕</button>
+                ${isG ? `<small>${m.name}</small>` : ''}
+                <div>${m.txt}</div>
+                <i class="fas fa-times del-msg" onclick="deleteMsg('${m._id}')"></i>
             `;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
         }
 
-        // --- Socket Handlers ---
         function sendMsg() {
             const inp = document.getElementById('msg-input');
             if (!inp.value.trim()) return;
-            socket.emit('msg', { room: currentRoom, txt: inp.value, type: 'text' });
+            socket.emit('send_msg', { room: currentRoom, text: inp.value, is_g: isG });
             inp.value = '';
+        }
+
+        function deleteMsg(mid) {
+            socket.emit('delete_msg', { mid: mid });
         }
 
         socket.on('new_msg', m => {
             if (m.room === currentRoom) renderMsg(m);
-            new Audio('/static/msg.mp3').play().catch(()=>{});
+            else {
+                msgSound.play().catch(()=>{});
+                if (Notification.permission === "granted") {
+                    new Notification(`Nexus: ${m.name}`, { body: m.txt, icon: m.av });
+                }
+            }
         });
 
-        // Статус печатает
-        let typingTimeout;
+        socket.on('msg_deleted', d => document.getElementById(`msg-${d.mid}`)?.remove());
+
+        // Печатает...
+        let tT;
         document.getElementById('msg-input').oninput = () => {
-            socket.emit('typing', { room: currentRoom, st: true, is_g: isGroup });
-            clearTimeout(typingTimeout);
-            typingTimeout = setTimeout(() => {
-                socket.emit('typing', { room: currentRoom, st: false, is_g: isGroup });
-            }, 2000);
+            socket.emit('typing', { room: currentRoom, st: true, is_g: isG });
+            clearTimeout(tT);
+            tT = setTimeout(() => socket.emit('typing', { room: currentRoom, st: false, is_g: isG }), 2000);
         };
 
         socket.on('typing_ev', d => {
             if (d.room === currentRoom) {
-                const el = document.getElementById('typing-indicator');
-                el.innerText = d.st ? (d.is_g ? `${d.name} печатает...` : 'печатает...') : '';
+                document.getElementById('typing-indicator').innerText = d.st ? d.msg : '';
             }
         });
 
-        // --- Звонки ---
+        // Звонки
         function initCall(type) {
             socket.emit('call_init', { room: currentRoom, type: type });
-            showCallUI('Вызов...', '/static/default.png');
+            showCallUI("Вызов...", "/static/default.png");
         }
 
         socket.on('incoming_call', d => {
-            if (d.room === currentRoom) {
-                showCallUI(d.from, d.av);
-                document.getElementById('ringtone').play();
+            showCallUI(d.from_name, d.from_av);
+            document.getElementById('ringtone').play();
+            if (Notification.permission === "granted") {
+                new Notification(`Звонок от ${d.from_name}`, { icon: d.from_av });
             }
         });
 
-        function showCallUI(name, av) {
-            const overlay = document.getElementById('call-overlay');
-            overlay.style.display = 'flex';
-            document.getElementById('call-name').innerText = name;
-            document.getElementById('call-av').src = av;
+        function showCallUI(n, a) {
+            document.getElementById('call-overlay').style.display = 'flex';
+            document.getElementById('call-name').innerText = n;
+            document.getElementById('call-av').src = a;
         }
 
         function stopCall() {
             document.getElementById('call-overlay').style.display = 'none';
             document.getElementById('ringtone').pause();
+            document.getElementById('ringtone').currentTime = 0;
         }
-
-        // --- Инициализация ---
-        window.onload = () => {
-            loadChats();
-            // Запрос разрешения на уведомления
-            if (Notification.permission !== "granted") Notification.requestPermission();
-        };
 
         function closeChat() {
             document.getElementById('sidebar').classList.remove('hidden');
             document.getElementById('back-btn').style.display = 'none';
         }
 
-        // Переключение темы
-        function changeTheme() {
-            const body = document.body;
-            const newTheme = body.classList.contains('dark-theme') ? 'light' : 'dark';
-            body.className = `${newTheme}-theme`;
-            fetch('/api/profile/update', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ theme: newTheme })
-            });
-        }
+        window.onload = loadChats;
     </script>
 </body>
 </html>

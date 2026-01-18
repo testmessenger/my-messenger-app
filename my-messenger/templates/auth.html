@@ -7,15 +7,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#0b0e14] text-white h-screen flex items-center justify-center p-6">
-    <div class="w-full max-w-sm glass p-8 rounded-3xl border border-slate-800 flex flex-col bg-[#0f172a]">
-        <h1 class="text-3xl font-black text-blue-500 italic text-center mb-8">NEXUS LOGIN</h1>
-        <input id="un" type="text" placeholder="Username" class="bg-slate-800 p-4 rounded-2xl mb-4 outline-none border border-transparent focus:border-blue-500">
-        <input id="pw" type="password" placeholder="Password" class="bg-slate-800 p-4 rounded-2xl mb-8 outline-none border border-transparent focus:border-blue-500">
-        <button onclick="send(false)" class="bg-blue-600 p-4 rounded-2xl font-bold mb-3 transition-transform active:scale-95">ВОЙТИ</button>
-        <button onclick="send(true)" class="text-slate-500 text-sm">Нет аккаунта? Зарегистрироваться</button>
+    <div class="w-full max-w-sm bg-[#0f172a] p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl">
+        <h1 class="text-4xl font-black text-blue-500 italic text-center mb-8 italic tracking-tighter">NEXUS</h1>
+        <div class="space-y-4">
+            <input id="un" type="text" placeholder="Username (@)" class="w-full bg-slate-800 p-4 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all">
+            <input id="pw" type="password" placeholder="Password" class="w-full bg-slate-800 p-4 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all">
+            <button onclick="auth(false)" class="w-full bg-blue-600 p-4 rounded-2xl font-bold shadow-lg shadow-blue-900/30 active:scale-95 transition-all">ВОЙТИ</button>
+            <button onclick="auth(true)" class="w-full bg-slate-700 p-4 rounded-2xl font-bold active:scale-95 transition-all">РЕГИСТРАЦИЯ</button>
+        </div>
     </div>
     <script>
-        async function send(reg) {
+        async function auth(reg) {
             const r = await fetch('/api/auth', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},

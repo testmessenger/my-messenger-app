@@ -8,86 +8,56 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .video-note { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
-        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); }
         .dark body { background: #020617; color: #f1f5f9; }
         .light body { background: #f8fafc; color: #0f172a; }
+        .active-chat { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.1); }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden transition-colors duration-500">
+<body class="flex h-screen overflow-hidden">
 
-    <aside class="w-80 border-r border-slate-800 flex flex-col bg-slate-900/50">
-        <div class="p-4 border-b border-slate-800 flex justify-between items-center">
-            <h1 class="text-2xl font-black text-blue-500 tracking-tighter">NEXUS</h1>
-            <button onclick="toggleTheme()" class="p-2 hover:bg-slate-800 rounded-full">🌓</button>
+    <aside class="w-80 border-r border-slate-800 flex flex-col bg-slate-900/40">
+        <div class="p-4 flex justify-between items-center">
+            <h1 class="text-xl font-black text-blue-500">NEXUS</h1>
+            <button onclick="createGroupPrompt()" class="bg-blue-600 p-2 rounded-lg text-white hover:bg-blue-500"><i data-lucide="plus"></i></button>
         </div>
         
-        <div class="p-4"><input id="search" placeholder="Поиск сообщений..." class="w-full bg-slate-800/50 p-2 rounded-xl border border-slate-700 text-sm"></div>
-        
-        <div id="chats" class="flex-1 overflow-y-auto space-y-1 p-2">
-            <div onclick="switchRoom('general')" class="p-4 bg-blue-600/20 rounded-2xl border border-blue-500/30 cursor-pointer">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-bold">#</div>
-                    <div><p class="font-bold">Общий чат</p><p class="text-xs opacity-50">Нажмите для входа</p></div>
-                </div>
-            </div>
+        <div class="px-4 pb-2">
+            <input id="searchInput" oninput="searchNexus()" placeholder="Поиск людей и групп..." class="w-full bg-slate-800 p-2 rounded-xl border border-slate-700 text-sm outline-none">
         </div>
 
-        <div class="p-4 border-t border-slate-800 glass cursor-pointer" onclick="showMyProfile()">
-            <div class="flex items-center gap-3">
-                <img src="{{ user.avatar }}" class="w-10 h-10 rounded-full border-2 border-green-500">
-                <div class="min-w-0">
-                    <p class="font-bold truncate">{{ user.display_name }}</p>
-                    <p class="text-[10px] text-blue-400">@{{ user.username }}</p>
-                </div>
+        <div id="chats" class="flex-1 overflow-y-auto">
+            <div onclick="switchRoom('general')" class="p-4 cursor-pointer hover:bg-slate-800 transition active-chat"># Общий чат</div>
+            <div id="search-results" class="hidden border-b border-slate-800 pb-2"></div>
+            <div id="my-contacts" class="p-2 space-y-1"></div>
+        </div>
+
+        <div class="p-4 border-t border-slate-800 flex items-center gap-3">
+            <img src="{{ user.avatar }}" class="w-10 h-10 rounded-full border-2 border-blue-500">
+            <div class="flex-1 min-w-0">
+                <p class="font-bold truncate">{{ user.display_name }}</p>
+                <p class="text-[10px] text-blue-400">@{{ user.username }}</p>
             </div>
+            <button onclick="toggleTheme()">🌓</button>
         </div>
     </aside>
 
-    <main class="flex-1 flex flex-col relative">
-        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 glass z-10">
-            <div class="flex items-center gap-3">
-                <h2 id="current-room-name" class="font-bold text-lg"># general</h2>
-            </div>
-            <div class="flex gap-4 opacity-60">
-                <button onclick="startCall()"><i data-lucide="phone"></i></button>
-                <button><i data-lucide="info"></i></button>
-            </div>
+    <main class="flex-1 flex flex-col">
+        <header id="chat-header" class="h-16 border-b border-slate-800 flex items-center px-6 bg-slate-900/20 backdrop-blur-md">
+            <h2 class="font-bold"># general</h2>
         </header>
 
-        <div id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-4 bg-[url('https://i.ibb.co/5GvX8nQ/chat-bg.png')] bg-fixed">
-            </div>
+        <div id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
 
         <footer class="p-4 border-t border-slate-800 glass">
-            <div class="max-w-4xl mx-auto flex items-end gap-3">
-                <input type="file" id="fileInput" class="hidden" onchange="handleFileUpload(this)">
-                <button onclick="document.getElementById('fileInput').click()" class="p-2 text-slate-400 hover:text-blue-500"><i data-lucide="paperclip"></i></button>
-                
-                <div class="flex-1 bg-slate-800/80 rounded-2xl border border-slate-700 px-4 py-2">
-                    <textarea id="msgInput" rows="1" placeholder="Введите сообщение..." class="w-full bg-transparent border-none focus:outline-none resize-none py-1"></textarea>
-                </div>
-
-                <div class="flex gap-2">
-                    <button id="voiceBtn" class="bg-slate-800 p-3 rounded-full hover:bg-blue-600"><i data-lucide="mic"></i></button>
-                    <button onclick="recordCircle()" class="bg-slate-800 p-3 rounded-full hover:bg-red-600"><i data-lucide="camera"></i></button>
-                    <button onclick="send()" class="bg-blue-600 p-3 rounded-full shadow-lg shadow-blue-500/40"><i data-lucide="send"></i></button>
-                </div>
+            <div class="max-w-4xl mx-auto flex items-end gap-2">
+                <input type="file" id="fileInp" class="hidden" onchange="uploadFile(this)">
+                <button onclick="document.getElementById('fileInp').click()" class="p-3 text-slate-400"><i data-lucide="paperclip"></i></button>
+                <textarea id="msgInput" rows="1" placeholder="Сообщение..." class="flex-1 bg-slate-800 rounded-2xl p-3 outline-none resize-none"></textarea>
+                <button onclick="recordCircle()" class="p-3 bg-slate-800 rounded-full"><i data-lucide="camera"></i></button>
+                <button onclick="send()" class="p-3 bg-blue-600 rounded-full"><i data-lucide="send"></i></button>
             </div>
         </footer>
     </main>
-
-    <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-        <div class="bg-slate-900 w-full max-w-md rounded-3xl p-8 border border-slate-700">
-            <div class="text-center">
-                <img id="modal-avatar" src="" class="w-32 h-32 rounded-3xl mx-auto mb-4 border-4 border-blue-500">
-                <h2 id="modal-name" class="text-2xl font-bold"></h2>
-                <p id="modal-username" class="text-blue-400 mb-4"></p>
-                <p id="modal-bio" class="text-slate-400 italic bg-slate-800 p-4 rounded-xl"></p>
-                <div id="admin-actions" class="mt-6 flex flex-col gap-2">
-                     </div>
-                <button onclick="closeModal()" class="mt-6 text-slate-500">Закрыть</button>
-            </div>
-        </div>
-    </div>
 
     <script>
         lucide.createIcons();
@@ -97,74 +67,83 @@
 
         socket.emit('join_room', {room: currentRoom});
 
-        function send() {
-            const input = document.getElementById('msgInput');
-            if(!input.value) return;
-            socket.emit('send_msg', { room: currentRoom, text: input.value, type: 'text' });
-            input.value = '';
-        }
-
-        async function handleFileUpload(input) {
-            const file = input.files[0];
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch('/api/upload', {method: 'POST', body: formData});
+        async function searchNexus() {
+            const q = document.getElementById('searchInput').value;
+            if(q.length < 2) { document.getElementById('search-results').classList.add('hidden'); return; }
+            const res = await fetch(`/api/search?q=${q}`);
             const data = await res.json();
-            socket.emit('send_msg', { room: currentRoom, type: 'file', file_url: data.url, text: file.name });
+            const box = document.getElementById('search-results');
+            box.classList.remove('hidden');
+            box.innerHTML = '<p class="text-[10px] px-4 py-1 opacity-50 uppercase">Результаты поиска</p>';
+            
+            data.users.forEach(u => {
+                if(u._id === myId) return;
+                box.innerHTML += `<div onclick="openDM('${u._id}', '${u.username}')" class="p-3 flex items-center gap-2 hover:bg-blue-600/20 cursor-pointer">
+                    <img src="${u.avatar}" class="w-8 h-8 rounded-full"> @${u.username} (ЛС)</div>`;
+            });
+            data.groups.forEach(g => {
+                box.innerHTML += `<div onclick="switchRoom('${g._id}', '${g.title}')" class="p-3 flex items-center gap-2 hover:bg-slate-800 cursor-pointer">
+                    <div class="w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center text-xs">#</div> ${g.title}</div>`;
+            });
         }
 
-        // Запись кружочков
-        async function recordCircle() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            const recorder = new MediaRecorder(stream);
-            let chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'video/mp4' });
-                const formData = new FormData();
-                formData.append('file', blob);
-                const res = await fetch('/api/upload', {method: 'POST', body: formData});
-                const data = await res.json();
-                socket.emit('send_msg', { room: currentRoom, type: 'video_circle', file_url: data.url });
-            };
-            recorder.start();
-            setTimeout(() => recorder.stop(), 8000); // 8 секунд
+        function openDM(targetId, name) {
+            const room = [myId, targetId].sort().join("_");
+            switchRoom(room, `@${name}`);
+        }
+
+        function switchRoom(room, title = "Общий чат") {
+            currentRoom = room;
+            document.getElementById('chat-header').innerHTML = `<h2 class="font-bold">${title}</h2>`;
+            document.getElementById('chat-window').innerHTML = '';
+            socket.emit('join_room', {room: room});
+        }
+
+        async function createGroupPrompt() {
+            const title = prompt("Введите название группы:");
+            if(!title) return;
+            const res = await fetch('/api/groups/create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: title})
+            });
+            const data = await res.json();
+            switchRoom(data.id, title);
+        }
+
+        function send() {
+            const inp = document.getElementById('msgInput');
+            if(!inp.value) return;
+            socket.emit('send_msg', { room: currentRoom, text: inp.value, type: 'text' });
+            inp.value = '';
         }
 
         socket.on('new_message', (data) => {
             const win = document.getElementById('chat-window');
             const isMe = data.sender_id === myId;
             let content = `<p>${data.text}</p>`;
-            
             if(data.type === 'video_circle') content = `<video src="${data.file_url}" class="video-note" controls></video>`;
-            if(data.type === 'file') content = `<a href="${data.file_url}" download class="flex items-center gap-2 underline text-blue-400"><i data-lucide="file"></i> ${data.text}</a>`;
+            if(data.type === 'file') content = `<a href="${data.file_url}" download class="text-blue-400 underline">📎 Файл: ${data.text}</a>`;
 
             const html = `
-                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2">
-                    <div class="flex gap-3 max-w-[75%] group">
-                        ${!isMe ? `<img src="${data.sender_avatar}" class="w-8 h-8 rounded-full self-end cursor-pointer" onclick="showUserProfile('${data.sender_id}')">` : ''}
-                        <div class="relative ${isMe ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-200'} p-3 rounded-2xl ${isMe ? 'rounded-br-none' : 'rounded-bl-none'} shadow-xl">
-                            <p class="text-[10px] font-black opacity-50 mb-1">@${data.sender_username}</p>
+                <div id="msg-${data._id}" class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in">
+                    <div class="flex gap-2 max-w-[80%] group">
+                        <div class="relative ${isMe ? 'bg-blue-600' : 'bg-slate-800'} p-3 rounded-2xl">
+                            ${!isMe ? `<p class="text-[9px] font-bold text-blue-300">@${data.sender_name}</p>` : ''}
                             ${content}
-                            <div class="flex gap-2 mt-2">
-                                <button onclick="react('${data._id}', '❤️')" class="text-xs hover:scale-125 transition">❤️ ${data.reactions?.['❤️'] || ''}</button>
-                                <button onclick="deleteMsg('${data._id}')" class="opacity-0 group-hover:opacity-100 text-[10px] text-red-300 ml-2">Удалить</button>
-                            </div>
+                            <button onclick="deleteMsg('${data._id}')" class="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 opacity-0 group-hover:opacity-100 transition">✕</button>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
             win.insertAdjacentHTML('beforeend', html);
             win.scrollTop = win.scrollHeight;
             lucide.createIcons();
         });
 
-        function toggleTheme() {
-            document.documentElement.classList.toggle('dark');
-            document.documentElement.classList.toggle('light');
-        }
+        function deleteMsg(id) { socket.emit('delete_msg', {msg_id: id}); }
+        socket.on('msg_deleted', (id) => { document.getElementById(`msg-${id}`)?.remove(); });
 
-        function startCall() { alert("Интерфейс вызова активен. Соединение..."); }
+        function toggleTheme() { document.documentElement.classList.toggle('dark'); }
     </script>
 </body>
 </html>

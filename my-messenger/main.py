@@ -11,20 +11,25 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_CORE_2026'
+app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_2026'
 
-# Хранилище
-UPLOAD_FOLDER = 'static/uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Исправление ошибки FileExistsError для Render
+UPLOAD_FOLDER = os.path.join('static', 'uploads')
+if os.path.exists(UPLOAD_FOLDER):
+    if not os.path.isdir(UPLOAD_FOLDER):
+        os.remove(UPLOAD_FOLDER)
+        os.makedirs(UPLOAD_FOLDER)
+else:
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Подключение к MongoDB (Исправлено для Render/Gevent)
+# Подключение к базе
 client = MongoClient("mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority", connect=False)
 db = client['messenger_db']
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', max_http_buffer_size=25000000)
 
-online_users = {} # sid -> uid
+online_users = {}
 
 def get_current_user():
     if 'user_id' not in session: return None
@@ -37,8 +42,7 @@ def fix_id(obj):
         obj['_id'] = str(obj['_id'])
     return obj
 
-# --- API ---
-
+# --- РОУТЫ ---
 @app.route('/')
 def index():
     user = get_current_user()
@@ -51,29 +55,21 @@ def auth(): return render_template('auth.html')
 @app.route('/api/auth', methods=['POST'])
 def handle_auth():
     data = request.json
-    username = data.get('username', '').lower().strip()
-    password = data.get('pw')
-    user = db.users.find_one({"username": username})
-    
+    un = data.get('username', '').lower().strip()
+    user = db.users.find_one({"username": un})
     if data.get('reg'):
-        if user: return jsonify({"err": "Username занят"}), 400
+        if user: return jsonify({"err": "Занято"}), 400
         uid = db.users.insert_one({
-            "username": username, "pw": generate_password_hash(password),
-            "name": username, "bio": "Я в Nexus!", "av": "/static/default.png",
-            "theme": "dark", "is_online": False, "last_seen": "недавно"
+            "username": un, "pw": generate_password_hash(data.get('pw')),
+            "name": un, "bio": "Nexus User", "av": "/static/default.png",
+            "theme": "dark", "is_online": False, "last_seen": "был(а) недавно"
         }).inserted_id
         session['user_id'] = str(uid)
     else:
-        if user and check_password_hash(user['pw'], password):
+        if user and check_password_hash(user['pw'], data.get('pw')):
             session['user_id'] = str(user['_id'])
-        else: return jsonify({"err": "Неверные данные"}), 401
+        else: return jsonify({"err": "Ошибка"}), 401
     return jsonify({"ok": True})
-
-@app.route('/api/history/<room_id>')
-def get_history(room_id):
-    if 'user_id' not in session: return "401", 401
-    msgs = list(db.messages.find({"room": room_id}).sort("ts", 1).limit(50))
-    return jsonify(fix_id(msgs))
 
 @app.route('/api/groups', methods=['GET', 'POST'])
 def handle_groups():
@@ -86,48 +82,29 @@ def handle_groups():
             "muted": [], "banned": []
         }).inserted_id
         return jsonify({"id": str(gid)})
-    
-    groups = list(db.groups.find({"members": str(user['_id'])}))
-    for g in groups:
-        g['member_list'] = fix_id(list(db.users.find({"_id": {"$in": [ObjectId(m) for m in g['members']]}}, {"pw":0})))
-    return jsonify(fix_id(groups))
+    return jsonify(fix_id(list(db.groups.find({"members": str(user['_id'])}))))
 
-@app.route('/api/profile/update', methods=['POST'])
-def update_profile():
-    user = get_current_user()
-    if not user: return "401", 401
-    if request.is_json:
-        db.users.update_one({"_id": user['_id']}, {"$set": {"theme": request.json.get('theme')}})
-        return jsonify({"ok": True})
-    
-    update_data = {"name": request.form.get('name'), "bio": request.form.get('bio')}
-    if 'avatar' in request.files:
-        file = request.files['avatar']
-        if file.filename != '':
-            fname = secure_filename(f"{user['_id']}_{file.filename}")
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], fname))
-            update_data['av'] = f"/static/uploads/{fname}"
-    db.users.update_one({"_id": user['_id']}, {"$set": update_data})
-    return jsonify({"ok": True})
+@app.route('/api/history/<room_id>')
+def get_history(room_id):
+    msgs = list(db.messages.find({"room": room_id}).sort("ts", 1).limit(50))
+    return jsonify(fix_id(msgs))
 
 # --- SOCKETS ---
-
 @socketio.on('connect')
 def connect():
     user = get_current_user()
     if user:
         online_users[request.sid] = str(user['_id'])
         db.users.update_one({"_id": user['_id']}, {"$set": {"is_online": True, "last_seen": "в сети"}})
-        emit('user_status', {"uid": str(user['_id']), "status": "в сети"}, broadcast=True)
+        emit('status_change', {"uid": str(user['_id']), "status": "в сети"}, broadcast=True)
 
 @socketio.on('disconnect')
 def disconnect():
     uid = online_users.get(request.sid)
     if uid:
-        now = datetime.datetime.now().strftime("%H:%M")
-        db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"is_online": False, "last_seen": f"был(а) в {now}"}})
-        emit('user_status', {"uid": uid, "status": f"был(а) в {now}"}, broadcast=True)
-        online_users.pop(request.sid, None)
+        time = datetime.datetime.now().strftime("%H:%M")
+        db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"is_online": False, "last_seen": f"был(а) в {time}"}})
+        emit('status_change', {"uid": uid, "status": f"был(а) в {time}"}, broadcast=True)
 
 @socketio.on('join')
 def on_join(data): join_room(data['room'])
@@ -136,53 +113,33 @@ def on_join(data): join_room(data['room'])
 def on_typing(data):
     user = get_current_user()
     if user:
-        # Статус: Ник печатает (группа) или просто печатает (ЛС)
+        # В группе: "Ник печатает", в ЛС: "печатает"
         txt = f"{user['name']} печатает..." if data.get('is_g') else "печатает..."
-        emit('typing_ev', {"room": data['room'], "msg": txt, "st": data['st'], "uid": str(user['_id'])}, room=data['room'], include_self=False)
+        emit('typing_ev', {"room": data['room'], "msg": txt, "st": data['st']}, room=data['room'], include_self=False)
 
 @socketio.on('send_msg')
 def handle_msg(data):
     user = get_current_user()
-    if not user: return
-    
-    # Проверка мута/бана в группе
-    if len(data['room']) == 24:
-        group = db.groups.find_one({"_id": ObjectId(data['room'])})
-        if group:
-            if str(user['_id']) in group.get('banned', []): return
-            if str(user['_id']) in group.get('muted', []):
-                emit('error_alert', {"msg": "Вы в муте"}, room=request.sid)
-                return
+    # Проверка мута
+    room_id = data['room']
+    if len(room_id) == 24:
+        g = db.groups.find_one({"_id": ObjectId(room_id)})
+        if g and str(user['_id']) in g.get('muted', []):
+            emit('error_msg', "Вы в муте")
+            return
 
-    msg_obj = {
-        "room": data['room'], "sid": str(user['_id']), "name": user['name'],
-        "av": user['av'], "txt": data.get('text'), "type": data.get('type', 'text'),
-        "url": data.get('url'), "ts": datetime.datetime.now().isoformat(), "reacts": {}
+    msg = {
+        "room": room_id, "sid": str(user['_id']), "name": user['name'],
+        "av": user['av'], "txt": data.get('text'), "ts": datetime.datetime.now().isoformat()
     }
-    msg_id = db.messages.insert_one(msg_obj).inserted_id
-    msg_obj['_id'] = str(msg_id)
-    emit('new_msg', msg_obj, room=data['room'])
-
-@socketio.on('delete_msg')
-def delete(data):
-    user = get_current_user()
-    msg = db.messages.find_one({"_id": ObjectId(data['mid'])})
-    if not msg: return
-    can_del = (msg['sid'] == str(user['_id']))
-    if not can_del:
-        group = db.groups.find_one({"_id": ObjectId(msg['room'])})
-        if group and str(user['_id']) in group.get('admins', []): can_del = True
-    if can_del:
-        db.messages.delete_one({"_id": ObjectId(data['mid'])})
-        emit('msg_deleted', {"mid": data['mid']}, room=msg['room'])
+    mid = db.messages.insert_one(msg).inserted_id
+    msg['_id'] = str(mid)
+    emit('new_msg', msg, room=room_id)
 
 @socketio.on('call_init')
 def call(data):
     user = get_current_user()
-    emit('incoming_call', {
-        "room": data['room'], "from_name": user['name'], 
-        "from_av": user['av'], "type": data['type']
-    }, room=data['room'], include_self=False)
+    emit('incoming_call', {"room": data['room'], "from": user['name'], "av": user['av']}, room=data['room'], include_self=False)
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000)

@@ -3,174 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Nexus 2026</title>
+    <title>Nexus Infinity</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .circle-vid { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
+        body.dark { background: #020617; color: white; }
+        .circle-vid { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 4px solid #3b82f6; box-shadow: 0 0 20px rgba(59,130,246,0.5); }
         .typing-dots::after { content: '...'; animation: t 1.5s infinite; }
         @keyframes t { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
-        body.dark { background: #020617; color: #f1f5f9; }
-        .mobile-view #side { display: none; }
-        .mobile-view #main-chat { display: flex; width: 100%; }
-        #chat-win::-webkit-scrollbar { width: 4px; }
-        #chat-win::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+        .mobile-chat #side { display: none; }
+        .mobile-chat #chat-area { display: flex; width: 100%; }
+        .mute-overlay { background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; position: absolute; inset: 0; z-index: 50; border-radius: 12px; }
     </style>
 </head>
-<body class="{{ user.theme }} flex h-screen overflow-hidden">
+<body class="{{ user.theme }} flex h-screen overflow-hidden select-none">
     <audio id="snd-msg" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
     <audio id="snd-call" src="https://assets.mixkit.co/active_storage/sfx/1353/1353-preview.mp3" loop></audio>
 
-    <aside id="side" class="w-full md:w-80 border-r border-slate-800 bg-slate-900 flex flex-col z-20">
-        <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+    <aside id="side" class="w-full md:w-80 border-r border-slate-800 bg-slate-900/50 flex flex-col">
+        <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
             <h1 class="text-2xl font-black italic text-blue-500">NEXUS</h1>
-            <button onclick="addGroup()"><i data-lucide="plus-circle"></i></button>
+            <div class="flex gap-3">
+                <button onclick="toggleSearch()"><i data-lucide="search"></i></button>
+                <button onclick="createGrp()"><i data-lucide="plus"></i></button>
+            </div>
         </div>
-        <div id="chat-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
-        <div class="p-4 border-t border-slate-800 flex items-center gap-3 cursor-pointer" onclick="alert('Настройки скоро!')">
-            <img src="{{ user.av }}" class="w-10 h-10 rounded-full border-2 border-blue-500">
-            <div class="flex-1"><p class="font-bold text-sm">{{ user.name }}</p><p class="text-[10px] text-slate-500">@{{ user.username }}</p></div>
+        <div id="chat-list" class="flex-1 overflow-y-auto"></div>
+        <div class="p-4 border-t border-slate-800 flex items-center gap-3 cursor-pointer" onclick="openProfile()">
+            <img id="my-av" src="{{ user.av }}" class="w-10 h-10 rounded-full border-2 border-blue-600">
+            <div class="flex-1 overflow-hidden">
+                <p class="font-bold text-sm truncate">{{ user.name }}</p>
+                <p class="text-[10px] text-slate-500">@{{ user.username }}</p>
+            </div>
         </div>
     </aside>
 
-    <main id="main-chat" class="hidden md:flex flex-1 flex-col relative bg-slate-950/20">
-        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-4 backdrop-blur-md">
+    <main id="chat-area" class="hidden md:flex flex-1 flex-col relative">
+        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-4 bg-slate-900/30 backdrop-blur-xl">
             <div class="flex items-center gap-3">
                 <button onclick="backToList()" class="md:hidden"><i data-lucide="chevron-left"></i></button>
-                <div>
-                    <h2 id="r-title" class="font-bold text-sm">Выберите чат</h2>
-                    <div id="typing-indicator" class="hidden text-[10px] italic text-blue-400"><span id="t-name"></span><span class="typing-dots"></span></div>
-                    <p id="r-status" class="text-[9px] text-slate-500"></p>
+                <div onclick="showInfo()" class="cursor-pointer">
+                    <h2 id="target-name" class="font-bold text-sm">Выберите чат</h2>
+                    <p id="target-status" class="text-[10px] text-blue-400"></p>
+                    <div id="typing-box" class="hidden text-[10px] italic text-slate-400"><span id="t-user"></span><span class="typing-dots"></span></div>
                 </div>
             </div>
-            <button onclick="makeCall()" class="text-green-500 p-2"><i data-lucide="phone"></i></button>
+            <div class="flex gap-4 text-slate-400">
+                <button onclick="startCall('audio')" class="hover:text-green-500"><i data-lucide="phone"></i></button>
+                <button onclick="startCall('video')" class="hover:text-blue-500"><i data-lucide="video"></i></button>
+            </div>
         </header>
 
-        <div id="chat-win" class="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col"></div>
+        <div id="win" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
 
-        <footer class="p-4 border-t border-slate-800">
-            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-900 p-2 rounded-2xl border border-slate-800">
-                <button onclick="recordCircle()"><i data-lucide="camera" class="text-slate-400"></i></button>
-                <textarea id="min" rows="1" class="flex-1 bg-transparent p-2 outline-none text-sm resize-none" placeholder="Напишите сообщение..."></textarea>
-                <button onclick="send()" class="bg-blue-600 p-2 rounded-xl text-white"><i data-lucide="send"></i></button>
+        <footer class="p-4 border-t border-slate-800 relative">
+            <div id="mute-warn" class="mute-overlay hidden"><p class="text-red-500 font-bold text-xs uppercase tracking-widest">Вы в муте</p></div>
+            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-800 p-2 rounded-2xl border border-slate-700">
+                <label class="p-2 cursor-pointer hover:text-blue-400"><i data-lucide="paperclip"></i><input type="file" id="f-in" class="hidden" onchange="sendFile()"></label>
+                <textarea id="min" rows="1" class="flex-1 bg-transparent p-2 outline-none text-sm resize-none" placeholder="Сообщение..."></textarea>
+                <button onclick="recCircle()" id="btn-circle" class="p-2 text-slate-400"><i data-lucide="camera"></i></button>
+                <button onmousedown="startRec()" onmouseup="stopRec()" class="p-2 text-slate-400"><i data-lucide="mic"></i></button>
+                <button onclick="send()" class="bg-blue-600 p-2.5 rounded-xl text-white"><i data-lucide="send"></i></button>
             </div>
         </footer>
     </main>
 
-    <div id="call-ui" class="hidden fixed inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-center p-10">
-        <div class="w-32 h-32 bg-blue-600 rounded-full mb-8 animate-pulse flex items-center justify-center text-4xl">📞</div>
-        <h2 id="caller-name" class="text-2xl font-bold mb-2">Звонок...</h2>
-        <div class="flex gap-10 mt-10">
-            <button onclick="endCall()" class="bg-red-600 p-6 rounded-full"><i data-lucide="phone-off"></i></button>
-            <button onclick="acceptCall()" class="bg-green-600 p-6 rounded-full"><i data-lucide="phone"></i></button>
+    <div id="call-screen" class="hidden fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center">
+        <div class="w-32 h-32 bg-blue-600 rounded-full animate-pulse flex items-center justify-center text-4xl mb-6">📞</div>
+        <h2 id="call-from" class="text-2xl font-bold">Звонок...</h2>
+        <div class="flex gap-10 mt-12">
+            <button onclick="ansCall(false)" class="bg-red-600 p-6 rounded-full"><i data-lucide="phone-off"></i></button>
+            <button onclick="ansCall(true)" class="bg-green-600 p-6 rounded-full"><i data-lucide="phone"></i></button>
         </div>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[2rem] p-6" id="modal-box"></div>
     </div>
 
     <script>
         lucide.createIcons();
         const socket = io();
         const myId = "{{ user._id }}";
-        let curRoom = null, isG = false;
+        let cur = null, isG = false;
 
-        // --- ТИПИНГ ---
+        // --- РЕАЛЬНЫЙ ТАЙПИНГ ---
         let t_to;
         document.getElementById('min').addEventListener('input', () => {
-            if(!curRoom) return;
-            socket.emit('typing', {room: curRoom, st: true, is_g: isG});
+            if(!cur) return;
+            socket.emit('typing', {room: cur, st: true, is_g: isG});
             clearTimeout(t_to);
-            t_to = setTimeout(() => socket.emit('typing', {room: curRoom, st: false, is_g: isG}), 2000);
+            t_to = setTimeout(() => socket.emit('typing', {room: cur, st: false, is_g: isG}), 2000);
         });
 
         socket.on('is_typing', d => {
-            const el = document.getElementById('typing-indicator');
-            if(d.st) { el.classList.remove('hidden'); document.getElementById('t-name').innerText = d.is_g ? d.name+' печатает' : 'печатает'; }
-            else el.classList.add('hidden');
+            const box = document.getElementById('typing-box');
+            if(d.st) { 
+                box.classList.remove('hidden'); 
+                document.getElementById('t-user').innerText = d.is_g ? d.name + ' печатает' : 'печатает';
+            } else box.classList.add('hidden');
         });
 
-        // --- СООБЩЕНИЯ ---
+        // --- УВЕДОМЛЕНИЯ И ЗВОНКИ ---
         socket.on('new_msg', m => {
-            if(m.room === curRoom) renderMsg(m);
-            if(m.sid !== myId) document.getElementById('snd-msg').play();
+            if(m.room === cur) addMsg(m);
+            if(m.sid !== myId) {
+                document.getElementById('snd-msg').play();
+                if(Notification.permission === 'granted') new Notification(m.name, {body: m.txt});
+            }
         });
 
         socket.on('incoming_call', d => {
-            document.getElementById('call-ui').classList.remove('hidden');
-            document.getElementById('caller-name').innerText = d.from;
+            document.getElementById('call-screen').classList.remove('hidden');
+            document.getElementById('call-from').innerText = d.from;
             document.getElementById('snd-call').play();
         });
 
-        function renderMsg(m) {
-            const me = m.sid === myId;
-            let body = `<p class="text-sm">${m.txt || ''}</p>`;
-            if(m.type==='circle') body=`<video src="${m.url}" class="circle-vid" autoplay loop muted></video>`;
+        // --- ФУНКЦИИ ЧАТА ---
+        async function openChat(id, name, type) {
+            cur = id; isG = type === 'group';
+            document.body.classList.add('mobile-chat');
+            document.getElementById('target-name').innerText = name;
+            socket.emit('join', {room: id});
             
-            const html = `<div id="msg-${m._id}" class="flex ${me?'justify-end':'justify-start'}">
-                <div class="max-w-[85%] p-3 rounded-2xl ${me?'bg-blue-600 text-white':'bg-slate-800'} relative group shadow-lg">
+            // Статус "Был недавно"
+            if(!isG) {
+                const r = await fetch(`/api/user/find/${name}`);
+                const u = await r.json();
+                const last = new Date(u.last_seen).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                document.getElementById('target-status').innerText = `был(а) в ${last}`;
+            } else { document.getElementById('target-status').innerText = 'группа'; }
+
+            const h = await fetch(`/api/history/${id}`);
+            const ms = await h.json();
+            document.getElementById('win').innerHTML = '';
+            ms.forEach(addMsg);
+        }
+
+        function addMsg(m) {
+            const me = m.sid === myId;
+            let content = `<p class="text-sm">${m.txt || ''}</p>`;
+            if(m.type==='circle') content=`<video src="${m.url}" class="circle-vid" autoplay loop muted></video>`;
+            if(m.type==='file') content=`<a href="${m.url}" download class="flex items-center gap-2 text-blue-400 text-xs"><i data-lucide="file"></i> Документ</a>`;
+            
+            const html = `<div id="m-${m._id}" class="flex ${me?'justify-end':'justify-start'}">
+                <div class="max-w-[85%] p-3 rounded-2xl ${me?'bg-blue-600':'bg-slate-800'} relative group">
                     <p class="text-[9px] font-bold opacity-50 mb-1">${m.name}</p>
-                    ${body}
-                    ${me ? `<button onclick="delMsg('${m._id}')" class="hidden group-hover:block absolute -top-2 -right-2 bg-red-500 rounded-full p-1 text-[8px]">✕</button>` : ''}
+                    ${content}
+                    <div class="flex gap-1 mt-1">${Object.entries(m.reacts||{}).map(([e,c])=>`<span class="text-[10px] bg-black/20 rounded px-1">${e}${c}</span>`).join('')}</div>
+                    <div class="absolute -right-12 top-0 hidden group-hover:flex flex-col gap-1">
+                        <button onclick="socket.emit('add_react', {mid:'${m._id}', room:'${cur}', emoji:'❤️'})">❤️</button>
+                        <button onclick="socket.emit('del_msg', {mid:'${m._id}'})" class="text-red-500">✕</button>
+                    </div>
                 </div>
             </div>`;
-            document.getElementById('chat-win').insertAdjacentHTML('beforeend', html);
-            document.getElementById('chat-win').scrollTop = document.getElementById('chat-win').scrollHeight;
+            document.getElementById('win').insertAdjacentHTML('beforeend', html);
+            document.getElementById('win').scrollTop = document.getElementById('win').scrollHeight;
+            lucide.createIcons();
         }
 
-        // --- ГРУППЫ ---
-        async function loadChats() {
-            const r = await fetch('/api/groups');
-            const data = await r.json();
-            document.getElementById('chat-list').innerHTML = data.map(g => `
-                <div onclick="openChat('${g._id}', '${g.title}', 'group')" class="p-3 bg-slate-800/40 rounded-2xl cursor-pointer hover:bg-blue-600/20 transition">
-                    <p class="font-bold text-sm"># ${g.title}</p>
-                </div>
-            `).join('');
-        }
-
-        async function openChat(id, title, type) {
-            curRoom = id; isG = type === 'group';
-            document.body.classList.add('mobile-view');
-            document.getElementById('r-title').innerText = title;
-            document.getElementById('chat-win').innerHTML = '';
-            socket.emit('join', {room: id});
-            const r = await fetch(`/api/history/${id}`);
-            const ms = await r.json();
-            ms.forEach(renderMsg);
-        }
-
-        async function addGroup() {
-            const t = prompt("Название группы:");
-            if(t) {
-                await fetch('/api/groups', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({t: t})});
-                loadChats();
-            }
-        }
-
-        function backToList() { document.body.classList.remove('mobile-view'); }
-
-        async function recordCircle() {
+        // --- МЕДИА (КРУЖОЧКИ / ГОЛОСОВЫЕ) ---
+        async function recCircle() {
             const s = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
             const mr = new MediaRecorder(s); let ch = [];
             mr.ondataavailable = e => ch.push(e.data);
             mr.onstop = () => {
-                const b = new Blob(ch, {type:'video/mp4'});
                 const f = new FileReader();
-                f.onload = () => socket.emit('msg', {room: curRoom, type:'circle', url: f.result});
-                f.readAsDataURL(b);
+                f.onload = () => socket.emit('msg', {room: cur, type: 'circle', url: f.result});
+                f.readAsDataURL(new Blob(ch, {type:'video/mp4'}));
+                s.getTracks().forEach(t => t.stop());
             };
             mr.start(); setTimeout(() => mr.stop(), 5000);
         }
 
+        async function sendFile() {
+            const f = document.getElementById('f-in').files[0];
+            const reader = new FileReader();
+            reader.onload = () => socket.emit('msg', {room: cur, type: 'file', url: reader.result, txt: f.name});
+            reader.readAsDataURL(f);
+        }
+
         function send() {
             const t = document.getElementById('min').value;
-            if(t && curRoom) socket.emit('msg', {room: curRoom, txt: t});
+            if(t && cur) socket.emit('msg', {room: cur, txt: t});
             document.getElementById('min').value = '';
         }
 
-        function endCall() { document.getElementById('call-ui').classList.add('hidden'); document.getElementById('snd-call').pause(); }
-        function makeCall() { if(curRoom) socket.emit('call_req', {room: curRoom}); }
+        async function createGrp() {
+            const t = prompt("Название группы:");
+            if(t) {
+                await fetch('/api/groups', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({t:t})});
+                location.reload();
+            }
+        }
 
-        window.onload = loadChats;
+        function backToList() { document.body.classList.remove('mobile-chat'); }
+        function ansCall(v) { document.getElementById('call-screen').classList.add('hidden'); document.getElementById('snd-call').pause(); }
+        function startCall(t) { socket.emit('call_action', {room: cur, type: t}); alert('Вызов отправлен...'); }
+
+        // Инициализация чатов
+        (async () => {
+            const r = await fetch('/api/groups');
+            const gs = await r.json();
+            document.getElementById('chat-list').innerHTML = gs.map(g => `
+                <div onclick="openChat('${g._id}', '${g.title}', 'group')" class="p-4 hover:bg-blue-600/10 cursor-pointer flex justify-between items-center border-b border-slate-800/50">
+                    <div><p class="font-bold text-sm"># ${g.title}</p></div>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-slate-600"></i>
+                </div>
+            `).join('');
+            lucide.createIcons();
+            Notification.requestPermission();
+        })();
     </script>
 </body>
 </html>

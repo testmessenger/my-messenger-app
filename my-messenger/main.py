@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()  # СТРОГО В ПЕРВОЙ СТРОКЕ КОДА
+
 import os
 import datetime
 import base64
@@ -122,3 +125,4 @@ def react(data):
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=10000)
+

@@ -7,78 +7,81 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
-        :root { --bg: #0b0d14; --panel: #161922; --text: #ffffff; --accent: #0088cc; --msg-in: #1f232f; --msg-out: #005c4b; }
-        .light-theme { --bg: #f0f2f5; --panel: #ffffff; --text: #000000; --accent: #0088cc; --msg-in: #ffffff; --msg-out: #d9fdd3; }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-        body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; }
-
-        /* Адаптивность для телефонов */
-        .sidebar { width: 350px; background: var(--panel); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; transition: 0.3s; }
-        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--bg); }
+        :root { --bg: #0f111a; --panel: #1a1d29; --text: #fff; --accent: #0088cc; --msg-in: #242936; --msg-out: #005c4b; }
+        .light-theme { --bg: #f0f2f5; --panel: #ffffff; --text: #000; --accent: #0084ff; --msg-in: #fff; --msg-out: #d9fdd3; }
         
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
+
+        /* АДАПТАЦИЯ */
+        .sidebar { width: 350px; background: var(--panel); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; transition: 0.3s; z-index: 100; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+
         @media (max-width: 768px) {
-            .sidebar { position: fixed; inset: 0; width: 100%; z-index: 10; }
-            .sidebar.hidden { transform: translateX(-100%); }
-            .chat-area { width: 100%; }
+            .sidebar { position: fixed; inset: 0; width: 100%; }
+            .sidebar.mobile-hide { transform: translateX(-100%); }
         }
 
+        /* СООБЩЕНИЯ */
         #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { max-width: 80%; padding: 10px; border-radius: 12px; position: relative; font-size: 15px; }
-        .msg.in { align-self: flex-start; background: var(--msg-in); }
-        .msg.out { align-self: flex-end; background: var(--msg-out); }
-        .msg small { font-weight: bold; font-size: 11px; color: var(--accent); display: block; }
+        .msg { max-width: 75%; padding: 10px 14px; border-radius: 16px; position: relative; }
+        .msg.in { align-self: flex-start; background: var(--msg-in); border-bottom-left-radius: 4px; }
+        .msg.out { align-self: flex-end; background: var(--msg-out); border-bottom-right-radius: 4px; }
+        .msg small { color: var(--accent); font-weight: bold; font-size: 11px; display: block; margin-bottom: 2px; }
 
-        .input-box { padding: 10px; background: var(--panel); display: flex; align-items: center; gap: 10px; }
-        .input-box input { flex: 1; padding: 12px; border-radius: 20px; border: none; background: var(--bg); color: var(--text); outline: none; }
-        
-        .typing-status { font-size: 12px; color: var(--accent); padding: 5px 15px; height: 22px; }
+        /* КРУЖОЧКИ И ВИДЕО */
+        .video-note { width: 220px; height: 220px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); }
 
-        /* Окно звонка */
-        #call-ui { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
-        .call-av { width: 120px; height: 120px; border-radius: 50%; border: 3px solid var(--accent); }
-        .call-btns { display: flex; gap: 30px; margin-top: 40px; }
-        .c-btn { width: 65px; height: 65px; border-radius: 50%; border: none; font-size: 24px; color: #fff; cursor: pointer; }
+        /* ВВОД */
+        .input-bar { padding: 10px; background: var(--panel); display: flex; align-items: center; gap: 10px; }
+        .input-bar input { flex: 1; padding: 12px 18px; border-radius: 25px; border: none; background: var(--bg); color: var(--text); outline: none; }
+
+        /* ЗВОНОК */
+        #call-ui { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; }
+        .call-btn { width: 65px; height: 65px; border-radius: 50%; border: none; font-size: 24px; color: #fff; cursor: pointer; }
     </style>
 </head>
 <body class="{{ user.theme }}-theme">
 
     <div class="sidebar" id="sidebar">
         <div style="padding: 15px; display: flex; justify-content: space-between; align-items: center; background: var(--panel);">
-            <img src="{{ user.av }}" style="width: 40px; height: 40px; border-radius: 50%;">
-            <h3>Nexus</h3>
-            <i class="fas fa-plus" onclick="createGroup()"></i>
+            <img src="{{ user.av }}" style="width: 45px; height: 45px; border-radius: 50%;" onclick="openProfile()">
+            <h2 style="font-size: 20px;">Nexus</h2>
+            <i class="fas fa-plus-circle" style="font-size: 22px;" onclick="createGroup()"></i>
         </div>
         <div id="chat-list" style="overflow-y: auto; flex: 1;"></div>
     </div>
 
     <div class="chat-area">
-        <div style="padding: 10px; background: var(--panel); display: flex; align-items: center;">
-            <i class="fas fa-arrow-left" id="back-btn" style="display: none; margin-right: 15px;" onclick="closeChat()"></i>
+        <div style="padding: 10px 15px; background: var(--panel); display: flex; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <i class="fas fa-arrow-left" id="back-btn" style="display: none; margin-right: 15px; font-size: 20px;" onclick="toggleSidebar(true)"></i>
             <div>
-                <h4 id="chat-title">Выберите чат</h4>
-                <p id="chat-status" style="font-size: 11px; opacity: 0.7;"></p>
+                <h4 id="active-title">Выберите чат</h4>
+                <p id="active-status" style="font-size: 12px; opacity: 0.6;"></p>
             </div>
-            <div id="call-actions" style="margin-left: auto; display: none;">
-                <i class="fas fa-phone" onclick="initCall()" style="cursor: pointer; font-size: 18px;"></i>
+            <div id="call-tools" style="margin-left: auto; display: none;">
+                <i class="fas fa-phone" onclick="startCall()" style="margin-right: 20px; cursor: pointer;"></i>
+                <i class="fas fa-video" style="cursor: pointer;"></i>
             </div>
         </div>
 
         <div id="messages"></div>
-        <div id="typing-indicator" class="typing-status"></div>
+        <div id="typing-box" style="padding: 0 20px; font-size: 12px; color: var(--accent); height: 20px; font-style: italic;"></div>
 
-        <div class="input-box" id="input-ui" style="display: none;">
-            <i class="fas fa-paperclip"></i>
-            <input type="text" id="msg-input" placeholder="Сообщение...">
-            <i class="fas fa-paper-plane" onclick="sendMsg()" style="color: var(--accent); cursor: pointer;"></i>
+        <div class="input-bar" id="input-ui" style="display: none;">
+            <i class="fas fa-paperclip" style="font-size: 20px;"></i>
+            <input type="text" id="m-input" placeholder="Сообщение...">
+            <i class="fas fa-camera" style="font-size: 20px;" onclick="alert('Запись кружочка...')"></i>
+            <i class="fas fa-paper-plane" onclick="sendMsg()" style="color: var(--accent); font-size: 22px; cursor: pointer;"></i>
         </div>
     </div>
 
     <div id="call-ui">
-        <img id="call-av" class="call-av" src="/static/default.png">
-        <h2 id="call-name" style="margin-top: 20px;">Входящий вызов...</h2>
-        <div class="call-btns">
-            <button class="c-btn" style="background: #2ecc71;" onclick="acceptCall()"><i class="fas fa-phone"></i></button>
-            <button class="c-btn" style="background: #e74c3c;" onclick="stopCall()"><i class="fas fa-phone-slash"></i></button>
+        <img id="call-av" style="width: 140px; height: 140px; border-radius: 50%; border: 3px solid var(--accent);">
+        <h2 id="call-name" style="margin-top: 25px;">Звонок...</h2>
+        <div style="display: flex; gap: 40px; margin-top: 40px;">
+            <button class="call-btn" style="background: #2ecc71;" onclick="answer()"><i class="fas fa-phone"></i></button>
+            <button class="call-btn" style="background: #e74c3c;" onclick="hangup()"><i class="fas fa-phone-slash"></i></button>
         </div>
         <audio id="ringtone" src="/static/ringtone.mp3" loop></audio>
     </div>
@@ -90,69 +93,61 @@
         let isG = false;
         const msgSound = new Audio('/static/msg.mp3');
 
-        // Уведомления
         if (Notification.permission !== "granted") Notification.requestPermission();
 
-        async function loadChats() {
+        async function loadGroups() {
             const r = await fetch('/api/groups');
             const data = await r.json();
             const list = document.getElementById('chat-list');
             list.innerHTML = '';
             data.forEach(g => {
-                const div = document.createElement('div');
-                div.style = "padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;";
-                div.onclick = () => selectChat(g._id, g.title, true, g.members.length);
-                div.innerHTML = `<strong>${g.title}</strong><br><small>${g.members.length} участников</small>`;
-                list.appendChild(div);
+                const item = document.createElement('div');
+                item.style = "padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer;";
+                item.onclick = () => selectChat(g._id, g.title, true, g.members.length);
+                item.innerHTML = `<strong>${g.title}</strong><br><small style="opacity:0.5">${g.members.length} участников</small>`;
+                list.appendChild(item);
             });
         }
 
-        function selectChat(id, title, groupMode, count) {
+        function selectChat(id, title, groupMode, membersCount) {
             currentRoom = id; isG = groupMode;
-            document.getElementById('chat-title').innerText = title;
-            document.getElementById('chat-status').innerText = isG ? `${count} участников` : "в сети";
+            document.getElementById('active-title').innerText = title;
+            document.getElementById('active-status').innerText = isG ? `${membersCount} участников` : "в сети";
             document.getElementById('input-ui').style.display = 'flex';
-            document.getElementById('call-actions').style.display = 'block';
+            document.getElementById('call-tools').style.display = 'block';
             document.getElementById('messages').innerHTML = '';
             socket.emit('join', { room: id });
-            fetch(`/api/history/${id}`).then(r => r.json()).then(msgs => msgs.forEach(renderMsg));
             
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.add('hidden');
-                document.getElementById('back-btn').style.display = 'block';
-            }
-        }
-
-        function renderMsg(m) {
-            const div = document.createElement('div');
-            div.className = `msg ${m.sid === myId ? 'out' : 'in'}`;
-            div.innerHTML = `<small>${m.name}</small><div>${m.txt}</div>`;
-            document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            if (window.innerWidth <= 768) toggleSidebar(false);
         }
 
         function sendMsg() {
-            const inp = document.getElementById('msg-input');
+            const inp = document.getElementById('m-input');
             if (!inp.value.trim()) return;
-            socket.emit('send_msg', { room: currentRoom, text: inp.value });
+            socket.emit('send_msg', { room: currentRoom, text: inp.value, is_g: isG });
             inp.value = '';
         }
 
-        // Печатает...
-        let tT;
-        document.getElementById('msg-input').oninput = () => {
+        // ПЕЧАТАЕТ...
+        let tTimer;
+        document.getElementById('m-input').oninput = () => {
             socket.emit('typing', { room: currentRoom, st: true, is_g: isG });
-            clearTimeout(tT);
-            tT = setTimeout(() => socket.emit('typing', { room: currentRoom, st: false, is_g: isG }), 2000);
+            clearTimeout(tTimer);
+            tTimer = setTimeout(() => socket.emit('typing', { room: currentRoom, st: false, is_g: isG }), 2000);
         };
 
         socket.on('typing_ev', d => {
-            if (d.room === currentRoom) document.getElementById('typing-indicator').innerText = d.st ? d.msg : '';
+            if (d.room === currentRoom) document.getElementById('typing-box').innerText = d.st ? d.msg : '';
         });
 
         socket.on('new_msg', m => {
-            if (m.room === currentRoom) renderMsg(m);
-            else {
+            if (m.room === currentRoom) {
+                const div = document.createElement('div');
+                div.className = `msg ${m.sid === myId ? 'out' : 'in'}`;
+                div.innerHTML = `<small>${m.name}</small><div>${m.txt}</div>`;
+                document.getElementById('messages').appendChild(div);
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            } else {
                 msgSound.play().catch(()=>{});
                 if (Notification.permission === "granted") {
                     new Notification(`Nexus: ${m.name}`, { body: m.txt, icon: m.av });
@@ -161,7 +156,7 @@
         });
 
         // ЗВОНКИ
-        function initCall() {
+        function startCall() {
             socket.emit('call_init', { room: currentRoom });
             document.getElementById('call-ui').style.display = 'flex';
         }
@@ -173,17 +168,19 @@
             document.getElementById('ringtone').play();
         });
 
-        function stopCall() {
+        function hangup() {
             document.getElementById('call-ui').style.display = 'none';
             document.getElementById('ringtone').pause();
         }
 
-        function closeChat() {
-            document.getElementById('sidebar').classList.remove('hidden');
-            document.getElementById('back-btn').style.display = 'none';
+        function toggleSidebar(show) {
+            const sb = document.getElementById('sidebar');
+            show ? sb.classList.remove('mobile-hide') : sb.classList.add('mobile-hide');
+            document.getElementById('back-btn').style.display = show ? 'none' : 'block';
         }
 
-        window.onload = loadChats;
+        window.onload = loadGroups;
+        if (window.innerWidth <= 768) toggleSidebar(true);
     </script>
 </body>
 </html>

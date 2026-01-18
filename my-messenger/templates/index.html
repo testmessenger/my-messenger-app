@@ -1,180 +1,214 @@
-<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>LiteGram Ultimate</title>
-<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-<style>
-    :root { --bg: #0e1621; --surf: #17212b; --acc: #2481cc; --txt: #fff; --msg: #182533; }
-    .light-theme { --bg: #f0f2f5; --surf: #ffffff; --acc: #0088cc; --txt: #000; --msg: #e4e6eb; }
-    body { background: var(--bg); color: var(--txt); margin:0; display:flex; height:100vh; font-family: sans-serif; transition: 0.3s; }
-    
-    #auth-screen { position:fixed; inset:0; background:var(--bg); z-index:10000; display:flex; align-items:center; justify-content:center; }
-    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9000; align-items:center; justify-content:center; }
-    .modal-content { background:var(--surf); padding:20px; border-radius:15px; width:300px; }
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Messenger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root { --accent: #3b82f6; }
+        .dark body { background-color: #0f172a; color: #f1f5f9; }
+        .light body { background-color: #f8fafc; color: #0f172a; }
+        .glass { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(12px); }
+        .video-circle { width: 200px; height: 200px; border-radius: 50%; overflow: hidden; border: 3px solid var(--accent); }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden font-sans transition-colors duration-300">
 
-    #sidebar { width:320px; background:var(--surf); border-right:1px solid rgba(0,0,0,0.2); display:flex; flex-direction:column; }
-    #chat-area { flex:1; display:flex; flex-direction:column; position:relative; }
-    #messages { flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; }
-    
-    .msg { max-width:75%; padding:10px; border-radius:12px; background:var(--msg); position:relative; }
-    .msg.my { align-self:flex-end; background:var(--acc); color:#fff; }
-    .avatar { width:40px; height:40px; border-radius:50%; object-fit:cover; }
-    .btn-icon { background:none; border:none; color:var(--acc); cursor:pointer; font-size:20px; }
-    #v-preview { position:absolute; bottom:80px; right:20px; width:120px; height:120px; border-radius:50%; border:2px solid red; display:none; object-fit:cover; }
-</style></head>
-<body class="dark-theme">
-
-<div id="auth-screen">
-    <div class="modal-content" style="text-align:center;">
-        <h2>LiteGram</h2>
-        <input id="a-nick" placeholder="@username"><input id="a-pass" type="password" placeholder="Пароль">
-        <button onclick="doAuth('login')" style="width:100%; padding:10px; background:var(--acc); color:#fff; border:none; margin-top:10px;">Войти</button>
-        <button onclick="doAuth('reg')" style="width:100%; margin-top:5px; background:none; color:var(--acc); border:none;">Регистрация</button>
-    </div>
-</div>
-
-<div id="modal-prof" class="modal">
-    <div class="modal-content">
-        <h3>Настройки</h3>
-        Имя: <input id="p-name">
-        О себе: <textarea id="p-bio" style="width:100%"></textarea>
-        Аватар (URL): <input id="p-ava">
-        Тема: <select id="p-theme"><option value="dark-theme">Темная</option><option value="light-theme">Светлая</option></select>
-        <button onclick="saveProf()" style="width:100%; background:var(--acc); color:#fff; border:none; padding:10px; margin-top:10px;">Сохранить</button>
-        <button onclick="closeModals()" style="width:100%; margin-top:5px;">Отмена</button>
-    </div>
-</div>
-
-<div id="modal-user" class="modal">
-    <div class="modal-content" style="text-align:center;">
-        <img id="u-ava" class="avatar" style="width:80px; height:80px;">
-        <h3 id="u-name"></h3><p id="u-nick" style="color:var(--acc)"></p><p id="u-bio"></p>
-        <div id="admin-btns" style="display:none; border-top:1px solid #444; padding-top:10px;">
-            <button onclick="adm('mute')">Мут</button><button onclick="adm('ban')" style="color:red">Бан</button>
+    <aside class="w-80 border-r border-slate-700/50 flex flex-col glass z-20">
+        <div class="p-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <i data-lucide="zap" class="text-white w-5"></i>
+                </div>
+                <h1 class="font-bold text-lg tracking-tight">Nexus</h1>
+            </div>
+            <button onclick="openModal('settings-modal')" class="hover:rotate-45 transition-transform">
+                <i data-lucide="settings" class="w-5 text-slate-400"></i>
+            </button>
         </div>
-        <button onclick="closeModals()" style="width:100%; margin-top:10px;">Закрыть</button>
+
+        <div class="px-4 mb-4">
+            <div class="relative">
+                <i data-lucide="search" class="absolute left-3 top-2.5 w-4 text-slate-500"></i>
+                <input type="text" placeholder="Поиск чатов..." class="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+
+        <div id="chat-list" class="flex-1 overflow-y-auto px-2 space-y-1">
+            <div onclick="selectChat('general')" class="flex items-center gap-3 p-3 rounded-xl bg-blue-600/10 border border-blue-500/20 cursor-pointer">
+                <div class="relative">
+                    <img src="https://ui-avatars.com/api/?name=Global+Chat" class="w-12 h-12 rounded-full">
+                    <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-900 rounded-full"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-baseline">
+                        <h3 class="font-semibold truncate">Общий чат</h3>
+                        <span class="text-[10px] text-slate-500">12:45</span>
+                    </div>
+                    <p class="text-xs text-slate-400 truncate">Админ: Добро пожаловать!</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-slate-700/50">
+            <button onclick="openModal('create-group-modal')" class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/20">
+                <i data-lucide="plus-circle" class="w-5"></i>
+                Создать группу
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col relative">
+        <header class="h-16 border-b border-slate-700/50 flex items-center justify-between px-6 glass">
+            <div class="flex items-center gap-3">
+                <div id="active-chat-avatar" class="w-10 h-10 bg-slate-700 rounded-full"></div>
+                <div>
+                    <h2 id="active-chat-name" class="font-bold">Выберите чат</h2>
+                    <p id="active-chat-status" class="text-xs text-blue-400">онлайн: 42</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 text-slate-400">
+                <button class="hover:text-blue-400"><i data-lucide="phone" class="w-5"></i></button>
+                <button class="hover:text-blue-400"><i data-lucide="video" class="w-5"></i></button>
+                <button class="hover:text-slate-200" onclick="toggleRightPanel()"><i data-lucide="layout-panel-right" class="w-5"></i></button>
+            </div>
+        </header>
+
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://i.ibb.co/5GvX8nQ/chat-bg.png')] bg-repeat opacity-95">
+            </div>
+
+        <div id="mute-indicator" class="hidden mx-6 p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-center text-red-400 text-sm mb-2">
+            Вы в муте администратором
+        </div>
+
+        <footer class="p-4 glass border-t border-slate-700/50">
+            <div class="max-w-4xl mx-auto flex items-end gap-3">
+                <div class="flex gap-2 pb-1">
+                    <button class="text-slate-400 hover:text-blue-400"><i data-lucide="paperclip" class="w-6"></i></button>
+                    <button class="text-slate-400 hover:text-yellow-400"><i data-lucide="smile" class="w-6"></i></button>
+                </div>
+                
+                <div class="flex-1 bg-slate-800/80 rounded-2xl border border-slate-700 px-4 py-2 flex items-center gap-3">
+                    <textarea id="msgInput" rows="1" placeholder="Написать сообщение..." class="w-full bg-transparent border-none focus:outline-none resize-none py-1 text-sm"></textarea>
+                </div>
+
+                <div class="flex gap-2 pb-1">
+                    <button id="voiceBtn" class="bg-slate-700 p-3 rounded-full hover:bg-slate-600"><i data-lucide="mic" class="w-5"></i></button>
+                    <button id="videoBtn" class="bg-slate-700 p-3 rounded-full hover:bg-slate-600"><i data-lucide="camera" class="w-5"></i></button>
+                    <button onclick="sendMessage()" class="bg-blue-600 p-3 rounded-full hover:bg-blue-500 text-white shadow-lg shadow-blue-500/40">
+                        <i data-lucide="send" class="w-5"></i>
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <aside id="right-panel" class="hidden w-72 border-l border-slate-700/50 glass p-6 flex flex-col gap-6">
+        <div class="text-center">
+            <img id="info-avatar" src="https://ui-avatars.com/api/?name=User" class="w-24 h-24 rounded-3xl mx-auto mb-4 border-4 border-slate-800">
+            <h3 id="info-name" class="font-bold text-xl">Имя Пользователя</h3>
+            <p id="info-username" class="text-blue-400 text-sm">@username</p>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="text-[10px] uppercase font-bold text-slate-500">О себе</label>
+                <p id="info-bio" class="text-sm text-slate-300">Программист, создатель Nexus.</p>
+            </div>
+            <div id="admin-tools" class="pt-4 border-t border-slate-700">
+                <button class="w-full text-left text-sm text-red-400 hover:bg-red-500/10 p-2 rounded-lg">Забанить пользователя</button>
+                <button class="w-full text-left text-sm text-yellow-400 hover:bg-yellow-500/10 p-2 rounded-lg">Выдать мут</button>
+            </div>
+        </div>
+    </aside>
+
+    <div id="settings-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-slate-900 border border-slate-700 w-[400px] rounded-3xl p-6 shadow-2xl">
+            <div class="flex justify-between mb-6">
+                <h2 class="text-xl font-bold">Настройки профиля</h2>
+                <button onclick="closeModal('settings-modal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div class="flex justify-center mb-4">
+                    <div class="relative group cursor-pointer">
+                        <img id="my-avatar-preview" src="https://ui-avatars.com/api/?name=Me" class="w-20 h-20 rounded-full border-2 border-blue-500">
+                        <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i data-lucide="camera" class="w-6"></i>
+                        </div>
+                    </div>
+                </div>
+                <input type="text" id="set-display-name" placeholder="Отображаемое имя" class="w-full bg-slate-800 rounded-xl p-3 border border-slate-700">
+                <textarea id="set-bio" placeholder="О себе" class="w-full bg-slate-800 rounded-xl p-3 border border-slate-700"></textarea>
+                <div class="flex items-center justify-between p-3 bg-slate-800 rounded-xl">
+                    <span>Темная тема</span>
+                    <button onclick="toggleTheme()" id="theme-toggle" class="w-12 h-6 bg-blue-600 rounded-full relative">
+                        <div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                    </button>
+                </div>
+                <button onclick="saveProfile()" class="w-full bg-blue-600 py-3 rounded-xl font-bold">Сохранить</button>
+            </div>
+        </div>
     </div>
-</div>
 
-<div id="sidebar">
-    <div style="padding:15px; display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="openMyProf()">
-        <img id="my-ava" class="avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png">
-        <div><b id="my-name">Имя</b><div id="my-nick" style="font-size:12px; opacity:0.6;"></div></div>
-    </div>
-    <input type="text" id="search" placeholder="🔍 Поиск сообщений..." oninput="doSearch()" style="margin:10px;">
-    <button onclick="const n=prompt('Имя группы?'); if(n) socket.emit('create_room',{name:n,nick:me.nick})" style="margin:10px;">+ Группа</button>
-    <div id="rooms-list" style="flex:1; overflow-y:auto;"></div>
-</div>
+    <script>
+        lucide.createIcons();
+        const socket = io();
+        let currentGroupId = "general";
 
-<div id="chat-area">
-    <video id="v-preview" autoplay muted></video>
-    <div style="padding:10px; background:var(--surf); display:flex; justify-content:space-between; align-items:center;">
-        <b id="chat-title">Чат</b>
-        <div id="group-actions" style="display:none;"><button onclick="showMembers()">👥 Участники</button></div>
-    </div>
-    <div id="messages"></div>
-    <div id="mute-msg" style="display:none; text-align:center; background:red;">ВЫ В МУТЕ</div>
-    <div style="padding:10px; background:var(--surf); display:flex; align-items:center; gap:5px;">
-        <label class="btn-icon">📎<input type="file" onchange="upFile(this)" style="display:none"></label>
-        <button class="btn-icon" onclick="rec('video')">📷</button>
-        <input id="msg-in" placeholder="Сообщение..." style="flex:1; background:none; border:none; color:var(--txt); outline:none;" onkeypress="if(event.key==='Enter') send()">
-        <button class="btn-icon" onclick="rec('audio')">🎤</button>
-        <button onclick="send()" class="btn-icon">➤</button>
-    </div>
-</div>
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
+        function toggleRightPanel() { document.getElementById('right-panel').classList.toggle('hidden'); }
 
-<script>
-    const socket = io();
-    let me = null, curRoom = 'global', rData = {}, isRec = false, mediaRec, chunks = [];
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        }
 
-    function doAuth(t) { socket.emit('auth', {type:t, nick:document.getElementById('a-nick').value, pass:document.getElementById('a-pass').value}); }
-    socket.on('auth_ok', u => { 
-        me = u; document.getElementById('auth-screen').style.display='none';
-        document.getElementById('my-name').innerText = u.name;
-        document.getElementById('my-nick').innerText = '@'+u.nick;
-        if(u.avatar) document.getElementById('my-ava').src = u.avatar;
-        document.body.className = u.theme;
-        socket.emit('get_rooms', me.nick);
-    });
+        function sendMessage() {
+            const text = document.getElementById('msgInput').value;
+            if(!text) return;
+            socket.emit('send_msg', {
+                group_id: currentGroupId,
+                text: text,
+                type: 'text'
+            });
+            document.getElementById('msgInput').value = '';
+        }
 
-    socket.on('load_rooms', rs => {
-        const l = document.getElementById('rooms-list'); l.innerHTML = '';
-        rs.forEach(r => {
-            const d = document.createElement('div'); d.className = 'user-row';
-            d.style.padding='10px'; d.style.cursor='pointer';
-            d.innerHTML = `<b>${r.name}</b>`;
-            d.onclick = () => {
-                curRoom = r.id; document.getElementById('chat-title').innerText = r.name;
-                document.getElementById('group-actions').style.display = r.type==='group'?'block':'none';
-                document.getElementById('messages').innerHTML = '';
-                socket.emit('join', {room:r.id, nick:me.nick});
-            };
-            l.appendChild(d);
+        socket.on('new_message', (data) => {
+            const container = document.getElementById('chat-messages');
+            const isMe = data.sender_id === "{{ session.user_id }}"; // Заменится при рендеринге Flask
+
+            const html = `
+                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} group">
+                    <div class="flex gap-3 max-w-[70%]">
+                        ${!isMe ? `<img src="${data.sender_avatar}" class="w-8 h-8 rounded-full self-end">` : ''}
+                        <div class="relative">
+                            <div class="${isMe ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-200'} p-3 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} shadow-sm">
+                                ${data.text}
+                                <div class="flex justify-end gap-1 mt-1">
+                                    <span class="text-[9px] opacity-60">12:50</span>
+                                </div>
+                            </div>
+                            <div class="absolute -bottom-2 ${isMe ? 'right-0' : 'left-0'} flex gap-1">
+                                <span class="bg-slate-700 border border-slate-600 rounded-full px-1.5 py-0.5 text-[10px] cursor-pointer hover:scale-110 transition-transform">❤️ 2</span>
+                            </div>
+                            <button onclick="deleteMsg('${data._id}')" class="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i data-lucide="x" class="w-3 h-3 text-white"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            container.scrollTop = container.scrollHeight;
+            lucide.createIcons();
         });
-    });
-
-    function openMyProf() {
-        document.getElementById('p-name').value = me.name;
-        document.getElementById('p-bio').value = me.bio;
-        document.getElementById('p-ava').value = me.avatar;
-        document.getElementById('p-theme').value = me.theme;
-        document.getElementById('modal-prof').style.display='flex';
-    }
-
-    function saveProf() {
-        socket.emit('update_profile', {nick:me.nick, name:document.getElementById('p-name').value, bio:document.getElementById('p-bio').value, avatar:document.getElementById('p-ava').value, theme:document.getElementById('p-theme').value});
-        closeModals();
-    }
-
-    socket.on('user_info', u => {
-        document.getElementById('u-ava').src = u.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-        document.getElementById('u-name').innerText = u.name;
-        document.getElementById('u-nick').innerText = '@'+u.nick;
-        document.getElementById('u-bio').innerText = u.bio;
-        document.getElementById('admin-btns').style.display = (me.nick===rData.owner || rData.admins?.includes(me.nick)) && u.nick!==me.nick ? 'block' : 'none';
-        window.selTarg = u.nick;
-        document.getElementById('modal-user').style.display='flex';
-    });
-
-    function send() {
-        const i = document.getElementById('msg-in');
-        if(i.value.trim()) { socket.emit('message', {room:curRoom, text:i.value, nick:me.nick, user:me.name}); i.value=''; }
-    }
-
-    socket.on('render_message', d => { if(d.room===curRoom) render(d); });
-    socket.on('history', h => h.forEach(render));
-    socket.on('room_update', r => { rData = r; document.getElementById('mute-msg').style.display = r.muted?.includes(me.nick)?'block':'none'; });
-
-    function render(d) {
-        let c = d.text ? `<div>${d.text}</div>` : '';
-        if(d.file) c = d.fileType.startsWith('image') ? `<img src="${d.file}" style="max-width:100%">` : `<a href="${d.file}" download>📄 ${d.fileName}</a>`;
-        if(d.video) c = `<video src="${d.video}" autoplay loop muted style="width:150px; border-radius:50%"></video>`;
-        const h = `<div class="msg ${d.nick===me.nick?'my':''}">
-            <small onclick="socket.emit('get_user','${d.nick}')" style="cursor:pointer; opacity:0.7">@${d.nick}</small>
-            ${c}
-            <div onclick="socket.emit('add_reaction',{msg_id:'${d.id}',emoji:'❤️',room:curRoom,nick:me.nick})" style="cursor:pointer; font-size:10px;">❤️ ${Object.keys(d.reactions||{}).length}</div>
-        </div>`;
-        const b = document.getElementById('messages'); b.insertAdjacentHTML('beforeend', h); b.scrollTop=b.scrollHeight;
-    }
-
-    function doSearch() {
-        const q = document.getElementById('search').value.toLowerCase();
-        document.querySelectorAll('.msg').forEach(m => m.style.display = m.innerText.toLowerCase().includes(q)?'block':'none');
-    }
-
-    function adm(a) { socket.emit('admin_action', {room:curRoom, target:window.selTarg, action:a, nick:me.nick}); closeModals(); }
-    function closeModals() { document.querySelectorAll('.modal').forEach(m=>m.style.display='none'); }
-    function upFile(el) { const f=el.files[0]; const r=new FileReader(); r.onload=e=>socket.emit('message',{room:curRoom,nick:me.nick,file:e.target.result,fileName:f.name,fileType:f.type}); r.readAsDataURL(f); }
-
-    async function rec(mode) {
-        if(!isRec) {
-            const s = await navigator.mediaDevices.getUserMedia({audio:true, video:mode==='video'});
-            if(mode==='video') { const p=document.getElementById('v-preview'); p.srcObject=s; p.style.display='block'; }
-            mediaRec = new MediaRecorder(s); chunks = [];
-            mediaRec.ondataavailable = e => chunks.push(e.data);
-            mediaRec.onstop = () => {
-                const b = new Blob(chunks, {type: mode==='video'?'video/webm':'audio/webm'});
-                const r = new FileReader(); r.onloadend = () => socket.emit('message', {room:curRoom, [mode]:r.result, nick:me.nick});
-                r.readAsDataURL(b); s.getTracks().forEach(t => t.stop()); document.getElementById('v-preview').style.display='none';
-            };
-            mediaRec.start(); isRec=true;
-        } else { mediaRec.stop(); isRec=false; }
-    }
-</script></body></html>
+    </script>
+</body>
+</html>

@@ -2,106 +2,161 @@
 <html lang="ru" class="dark">
 <head>
     <meta charset="UTF-8">
-    <title>Nexus Messenger | v1.0</title>
+    <title>Nexus Messenger</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .video-note { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 2px solid #3b82f6; }
-        .dark body { background: #0f172a; color: #e2e8f0; }
-        .light body { background: #f1f5f9; color: #0f172a; }
+        .video-note { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
+        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); }
+        .dark body { background: #020617; color: #f1f5f9; }
+        .light body { background: #f8fafc; color: #0f172a; }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden transition-all">
+<body class="flex h-screen overflow-hidden transition-colors duration-500">
 
-    <aside class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col">
-        <div class="p-4 border-b border-slate-800 flex justify-between">
-            <h1 class="text-xl font-black text-blue-500">NEXUS</h1>
-            <button onclick="toggleTheme()"><i data-lucide="moon"></i></button>
+    <aside class="w-80 border-r border-slate-800 flex flex-col bg-slate-900/50">
+        <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+            <h1 class="text-2xl font-black text-blue-500 tracking-tighter">NEXUS</h1>
+            <button onclick="toggleTheme()" class="p-2 hover:bg-slate-800 rounded-full">🌓</button>
         </div>
-        <div class="p-4"><input placeholder="Поиск..." class="w-full bg-slate-800 p-2 rounded-lg border-none"></div>
-        <div id="chat-list" class="flex-1 overflow-y-auto">
-             <div class="p-4 bg-blue-600/10 border-l-4 border-blue-500 cursor-pointer">
-                 <p class="font-bold"># Общий чат</p>
-                 <p class="text-xs opacity-50">Нажмите, чтобы войти</p>
-             </div>
+        
+        <div class="p-4"><input id="search" placeholder="Поиск сообщений..." class="w-full bg-slate-800/50 p-2 rounded-xl border border-slate-700 text-sm"></div>
+        
+        <div id="chats" class="flex-1 overflow-y-auto space-y-1 p-2">
+            <div onclick="switchRoom('general')" class="p-4 bg-blue-600/20 rounded-2xl border border-blue-500/30 cursor-pointer">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-bold">#</div>
+                    <div><p class="font-bold">Общий чат</p><p class="text-xs opacity-50">Нажмите для входа</p></div>
+                </div>
+            </div>
         </div>
-        <div class="p-4 border-t border-slate-800">
+
+        <div class="p-4 border-t border-slate-800 glass cursor-pointer" onclick="showMyProfile()">
             <div class="flex items-center gap-3">
                 <img src="{{ user.avatar }}" class="w-10 h-10 rounded-full border-2 border-green-500">
-                <div class="flex-1 min-w-0">
+                <div class="min-w-0">
                     <p class="font-bold truncate">{{ user.display_name }}</p>
-                    <p class="text-[10px] opacity-50">@{{ user.username }}</p>
+                    <p class="text-[10px] text-blue-400">@{{ user.username }}</p>
                 </div>
-                <button onclick="openSettings()"><i data-lucide="settings" class="w-5"></i></button>
             </div>
         </div>
     </aside>
 
-    <main class="flex-1 flex flex-col bg-slate-950/50">
-        <header class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-            <h2 id="chat-title" class="font-bold"># general</h2>
-            <div class="flex gap-4 opacity-70">
-                <i data-lucide="phone" class="cursor-pointer hover:text-blue-500"></i>
-                <i data-lucide="video" class="cursor-pointer hover:text-blue-500"></i>
+    <main class="flex-1 flex flex-col relative">
+        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 glass z-10">
+            <div class="flex items-center gap-3">
+                <h2 id="current-room-name" class="font-bold text-lg"># general</h2>
+            </div>
+            <div class="flex gap-4 opacity-60">
+                <button onclick="startCall()"><i data-lucide="phone"></i></button>
+                <button><i data-lucide="info"></i></button>
             </div>
         </header>
 
-        <div id="messages-area" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <div id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-4 bg-[url('https://i.ibb.co/5GvX8nQ/chat-bg.png')] bg-fixed">
             </div>
 
-        <footer class="p-4 bg-slate-900 border-t border-slate-800">
-            <div class="flex items-end gap-3 max-w-5xl mx-auto">
-                <button class="mb-2"><i data-lucide="paperclip"></i></button>
-                <textarea id="msgInput" rows="1" placeholder="Ваше сообщение..." class="flex-1 bg-slate-800 rounded-xl p-3 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
-                <button onclick="send()" class="mb-1 bg-blue-600 p-3 rounded-full"><i data-lucide="send" class="text-white"></i></button>
-                <button id="circleBtn" class="mb-1 bg-slate-700 p-3 rounded-full hover:bg-red-500 transition-colors"><i data-lucide="camera"></i></button>
+        <footer class="p-4 border-t border-slate-800 glass">
+            <div class="max-w-4xl mx-auto flex items-end gap-3">
+                <input type="file" id="fileInput" class="hidden" onchange="handleFileUpload(this)">
+                <button onclick="document.getElementById('fileInput').click()" class="p-2 text-slate-400 hover:text-blue-500"><i data-lucide="paperclip"></i></button>
+                
+                <div class="flex-1 bg-slate-800/80 rounded-2xl border border-slate-700 px-4 py-2">
+                    <textarea id="msgInput" rows="1" placeholder="Введите сообщение..." class="w-full bg-transparent border-none focus:outline-none resize-none py-1"></textarea>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="voiceBtn" class="bg-slate-800 p-3 rounded-full hover:bg-blue-600"><i data-lucide="mic"></i></button>
+                    <button onclick="recordCircle()" class="bg-slate-800 p-3 rounded-full hover:bg-red-600"><i data-lucide="camera"></i></button>
+                    <button onclick="send()" class="bg-blue-600 p-3 rounded-full shadow-lg shadow-blue-500/40"><i data-lucide="send"></i></button>
+                </div>
             </div>
         </footer>
     </main>
 
+    <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 w-full max-w-md rounded-3xl p-8 border border-slate-700">
+            <div class="text-center">
+                <img id="modal-avatar" src="" class="w-32 h-32 rounded-3xl mx-auto mb-4 border-4 border-blue-500">
+                <h2 id="modal-name" class="text-2xl font-bold"></h2>
+                <p id="modal-username" class="text-blue-400 mb-4"></p>
+                <p id="modal-bio" class="text-slate-400 italic bg-slate-800 p-4 rounded-xl"></p>
+                <div id="admin-actions" class="mt-6 flex flex-col gap-2">
+                     </div>
+                <button onclick="closeModal()" class="mt-6 text-slate-500">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         lucide.createIcons();
         const socket = io();
-        const myId = "{{ session.user_id }}";
         let currentRoom = "general";
+        const myId = "{{ user._id }}";
 
-        socket.emit('join', {room: currentRoom});
+        socket.emit('join_room', {room: currentRoom});
 
         function send() {
-            const txt = document.getElementById('msgInput').value;
-            if(!txt) return;
-            socket.emit('send_msg', { room: currentRoom, text: txt, type: 'text' });
-            document.getElementById('msgInput').value = '';
+            const input = document.getElementById('msgInput');
+            if(!input.value) return;
+            socket.emit('send_msg', { room: currentRoom, text: input.value, type: 'text' });
+            input.value = '';
+        }
+
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/upload', {method: 'POST', body: formData});
+            const data = await res.json();
+            socket.emit('send_msg', { room: currentRoom, type: 'file', file_url: data.url, text: file.name });
+        }
+
+        // Запись кружочков
+        async function recordCircle() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const recorder = new MediaRecorder(stream);
+            let chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'video/mp4' });
+                const formData = new FormData();
+                formData.append('file', blob);
+                const res = await fetch('/api/upload', {method: 'POST', body: formData});
+                const data = await res.json();
+                socket.emit('send_msg', { room: currentRoom, type: 'video_circle', file_url: data.url });
+            };
+            recorder.start();
+            setTimeout(() => recorder.stop(), 8000); // 8 секунд
         }
 
         socket.on('new_message', (data) => {
-            const area = document.getElementById('messages-area');
+            const win = document.getElementById('chat-window');
             const isMe = data.sender_id === myId;
-            
             let content = `<p>${data.text}</p>`;
-            if(data.type === 'video_circle') {
-                content = `<video src="${data.file_url}" class="video-note" controls></video>`;
-            }
+            
+            if(data.type === 'video_circle') content = `<video src="${data.file_url}" class="video-note" controls></video>`;
+            if(data.type === 'file') content = `<a href="${data.file_url}" download class="flex items-center gap-2 underline text-blue-400"><i data-lucide="file"></i> ${data.text}</a>`;
 
             const html = `
-                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} group">
-                    <div class="flex gap-2 max-w-[70%]">
-                        ${!isMe ? `<img src="${data.sender_avatar}" class="w-8 h-8 rounded-full self-end">` : ''}
-                        <div class="${isMe ? 'bg-blue-600' : 'bg-slate-800'} p-3 rounded-2xl relative">
-                            ${!isMe ? `<p class="text-[10px] font-bold mb-1 text-blue-300">@${data.sender_name}</p>` : ''}
+                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2">
+                    <div class="flex gap-3 max-w-[75%] group">
+                        ${!isMe ? `<img src="${data.sender_avatar}" class="w-8 h-8 rounded-full self-end cursor-pointer" onclick="showUserProfile('${data.sender_id}')">` : ''}
+                        <div class="relative ${isMe ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-200'} p-3 rounded-2xl ${isMe ? 'rounded-br-none' : 'rounded-bl-none'} shadow-xl">
+                            <p class="text-[10px] font-black opacity-50 mb-1">@${data.sender_username}</p>
                             ${content}
-                            <div class="flex items-center gap-2 mt-1">
-                                <span class="text-[9px] opacity-50">${data.ts.split('T')[1].slice(0,5)}</span>
-                                <span class="cursor-pointer hover:scale-125 transition-transform text-[10px]">❤️</span>
+                            <div class="flex gap-2 mt-2">
+                                <button onclick="react('${data._id}', '❤️')" class="text-xs hover:scale-125 transition">❤️ ${data.reactions?.['❤️'] || ''}</button>
+                                <button onclick="deleteMsg('${data._id}')" class="opacity-0 group-hover:opacity-100 text-[10px] text-red-300 ml-2">Удалить</button>
                             </div>
-                            ${isMe ? `<button onclick="deleteMsg('${data._id}')" class="absolute -left-8 top-2 opacity-0 group-hover:opacity-100 text-red-400">✕</button>` : ''}
                         </div>
                     </div>
                 </div>
             `;
-            area.insertAdjacentHTML('beforeend', html);
-            area.scrollTop = area.scrollHeight;
+            win.insertAdjacentHTML('beforeend', html);
+            win.scrollTop = win.scrollHeight;
+            lucide.createIcons();
         });
 
         function toggleTheme() {
@@ -109,11 +164,7 @@
             document.documentElement.classList.toggle('light');
         }
 
-        function deleteMsg(id) {
-            socket.emit('delete_msg', {msg_id: id});
-        }
-
-        socket.on('msg_deleted', (id) => { location.reload(); }); // Простое решение для обновления
+        function startCall() { alert("Интерфейс вызова активен. Соединение..."); }
     </script>
 </body>
 </html>

@@ -2,94 +2,89 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Nexus Infinity</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexus Premium</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body.dark { background: #020617; color: #f1f5f9; }
-        body.light { background: #ffffff; color: #0f172a; }
-        .circle-vid { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 4px solid #3b82f6; }
+        body.dark { background: #0f172a; color: white; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        .msg-in { border-radius: 18px 18px 18px 4px; background: #1e293b; }
+        .msg-out { border-radius: 18px 18px 4px 18px; background: #3b82f6; }
+        .circle-vid { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
+        @keyframes pulse-blue { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+        .calling { animation: pulse-blue 1.5s infinite; }
+        .mobile-chat-active #side { display: none; }
+        .mobile-chat-active #main { display: flex; width: 100%; }
         .typing-dots::after { content: '...'; animation: t 1.5s infinite; }
         @keyframes t { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
-        .mobile-view #side { display: none; }
-        .mobile-view #main-chat { display: flex; width: 100%; }
-        .group-admin-menu { display: none; position: absolute; background: #1e293b; border: 1px solid #334155; padding: 10px; border-radius: 12px; z-index: 100; }
-        #win::-webkit-scrollbar { width: 4px; }
-        #win::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
     </style>
 </head>
-<body class="{{ user.theme }} flex h-screen overflow-hidden">
+<body class="{{ user.theme }} flex h-screen overflow-hidden font-sans">
     <audio id="snd-msg" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
     <audio id="snd-call" src="https://assets.mixkit.co/active_storage/sfx/1353/1353-preview.mp3" loop></audio>
 
-    <aside id="side" class="w-full md:w-80 border-r border-slate-800 bg-slate-900/50 flex flex-col z-20">
-        <header class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
-            <h1 class="text-2xl font-black italic text-blue-500">NEXUS</h1>
-            <div class="flex gap-2">
-                <button onclick="document.getElementById('profile-modal').classList.remove('hidden')"><i data-lucide="user"></i></button>
+    <aside id="side" class="w-full md:w-80 border-r border-slate-800 flex flex-col glass z-20">
+        <div class="p-6 flex justify-between items-center">
+            <h1 class="text-2xl font-black text-blue-500 tracking-tighter">NEXUS</h1>
+            <div class="flex gap-3 text-slate-400">
                 <button onclick="createGrp()"><i data-lucide="plus-circle"></i></button>
+                <button onclick="toggleSettings()"><i data-lucide="settings"></i></button>
             </div>
-        </header>
-        <div class="p-4"><input id="glob-search" oninput="globalSearch(this.value)" placeholder="Поиск @username..." class="w-full bg-slate-800 p-3 rounded-2xl text-xs outline-none border border-slate-700"></div>
-        <div id="chat-list" class="flex-1 overflow-y-auto p-2"></div>
-        <div class="p-4 border-t border-slate-800 flex items-center gap-3">
-            <img id="my-av-nav" src="{{ user.av }}" class="w-10 h-10 rounded-full border-2 border-blue-600 object-cover">
-            <div class="flex-1"><p class="font-bold text-xs">{{ user.name }}</p><p class="text-[10px] text-slate-500">@{{ user.username }}</p></div>
+        </div>
+        <div class="px-4 mb-4">
+            <input id="g-search" oninput="globalSearch(this.value)" placeholder="Поиск @username..." class="w-full bg-slate-800/50 p-3 rounded-2xl text-sm outline-none border border-slate-700 focus:border-blue-500 transition-all">
+        </div>
+        <div id="chat-list" class="flex-1 overflow-y-auto px-2 space-y-1"></div>
+        <div class="p-4 glass m-2 rounded-2xl flex items-center gap-3">
+            <img src="{{ user.av }}" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover">
+            <div class="flex-1 overflow-hidden"><p class="font-bold text-xs truncate">{{ user.name }}</p><p class="text-[10px] text-slate-500">@{{ user.username }}</p></div>
         </div>
     </aside>
 
-    <main id="main-chat" class="hidden md:flex flex-1 flex-col relative bg-slate-950/20">
-        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-4 bg-slate-900/40 backdrop-blur-xl">
-            <div class="flex items-center gap-3">
-                <button onclick="back()" class="md:hidden"><i data-lucide="chevron-left"></i></button>
-                <div onclick="showChatInfo()" class="cursor-pointer">
-                    <h2 id="r-title" class="font-bold text-sm">Выберите чат</h2>
-                    <p id="r-status" class="text-[10px] text-blue-400"></p>
-                    <div id="typing-indicator" class="hidden text-[10px] italic text-slate-500"><span id="t-user"></span><span class="typing-dots"></span></div>
+    <main id="main" class="hidden md:flex flex-1 flex-col relative bg-[url('https://w0.peakpx.com/wallpaper/596/619/HD-wallpaper-whatsapp-background-dark-pattern.jpg')] bg-repeat bg-center">
+        <header class="h-20 glass flex items-center justify-between px-6 z-10">
+            <div class="flex items-center gap-4">
+                <button onclick="exitChat()" class="md:hidden p-2 bg-slate-800 rounded-full"><i data-lucide="arrow-left"></i></button>
+                <div onclick="toggleMembers()" class="cursor-pointer">
+                    <h2 id="r-title" class="font-bold text-lg">Выберите чат</h2>
+                    <p id="r-status" class="text-[11px] text-blue-400"></p>
+                    <div id="t-box" class="hidden text-[11px] italic text-slate-400"><span id="t-user"></span><span class="typing-dots"></span></div>
                 </div>
             </div>
-            <div class="flex gap-4">
-                <button onclick="startCall()" class="text-green-500"><i data-lucide="phone"></i></button>
-                <button onclick="toggleTheme()" class="text-slate-400"><i data-lucide="sun"></i></button>
-                <button id="del-chat-btn" onclick="deleteCurrentChat()" class="text-red-500 hidden"><i data-lucide="trash-2"></i></button>
+            <div class="flex gap-5 text-slate-300">
+                <button onclick="startCall()" class="hover:text-green-500"><i data-lucide="phone"></i></button>
+                <button onclick="toggleMembers()" class="hover:text-blue-500"><i data-lucide="users"></i></button>
             </div>
         </header>
 
-        <div id="win" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+        <div id="win" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
 
-        <footer class="p-4 border-t border-slate-800">
-            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-800 p-2 rounded-2xl border border-slate-700">
-                <label class="p-2 cursor-pointer hover:text-blue-400"><i data-lucide="paperclip"></i><input type="file" id="f-msg" class="hidden" onchange="sendAnyFile()"></label>
-                <textarea id="min" rows="1" class="flex-1 bg-transparent p-2 outline-none text-sm resize-none" placeholder="Напишите..."></textarea>
-                <button onclick="recordCircle()"><i data-lucide="camera" class="text-blue-400"></i></button>
-                <button onmousedown="startVoice()" onmouseup="stopVoice()" class="text-slate-400 p-2"><i data-lucide="mic"></i></button>
-                <button onclick="send()" class="bg-blue-600 p-2.5 rounded-xl text-white"><i data-lucide="send"></i></button>
+        <footer class="p-4 glass">
+            <div class="max-w-4xl mx-auto flex items-end gap-3 bg-slate-900/80 p-2 rounded-3xl border border-slate-700">
+                <label class="p-3 cursor-pointer text-slate-400 hover:text-blue-400 transition-colors"><i data-lucide="paperclip"></i><input type="file" id="f-msg" class="hidden" onchange="sendFiles()"></label>
+                <textarea id="min" rows="1" class="flex-1 bg-transparent p-3 outline-none text-sm resize-none" placeholder="Написать..."></textarea>
+                <button onclick="recCircle()" class="p-3 text-blue-400 hover:scale-110 transition-transform"><i data-lucide="camera"></i></button>
+                <button onclick="send()" class="bg-blue-600 hover:bg-blue-500 p-4 rounded-2xl text-white transition-all shadow-lg shadow-blue-600/20"><i data-lucide="send"></i></button>
             </div>
         </footer>
+
+        <div id="member-side" class="hidden absolute right-0 top-0 bottom-0 w-64 glass z-30 flex flex-col animate-in slide-in-from-right duration-300">
+            <div class="p-6 border-b border-slate-700 flex justify-between">
+                <h3 class="font-bold">Участники</h3>
+                <button onclick="toggleMembers()"><i data-lucide="x"></i></button>
+            </div>
+            <div id="member-list" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+        </div>
     </main>
 
-    <div id="call-ui" class="hidden fixed inset-0 z-[1000] bg-slate-950 flex flex-col items-center justify-center">
-        <div class="w-32 h-32 bg-blue-600 rounded-full animate-pulse flex items-center justify-center text-5xl mb-8 shadow-[0_0_50px_#3b82f6]">📞</div>
-        <h2 id="caller" class="text-2xl font-bold mb-10">Входящий вызов...</h2>
-        <div class="flex gap-10">
-            <button onclick="ansCall(false)" class="bg-red-600 p-6 rounded-full"><i data-lucide="phone-off"></i></button>
-            <button onclick="ansCall(true)" class="bg-green-600 p-6 rounded-full"><i data-lucide="phone"></i></button>
-        </div>
-    </div>
-
-    <div id="profile-modal" class="hidden fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] w-full max-w-sm">
-            <h3 class="font-bold mb-4">Мой профиль</h3>
-            <div class="flex flex-col items-center mb-4">
-                <img id="my-av-edit" src="{{ user.av }}" class="w-20 h-20 rounded-full mb-2 object-cover border-2 border-blue-600">
-                <label class="text-xs text-blue-400 cursor-pointer">Изменить фото<input type="file" id="av-input" class="hidden" onchange="uploadAv()"></label>
-            </div>
-            <input id="new-name" value="{{ user.name }}" class="w-full bg-slate-800 p-3 rounded-xl mb-2 text-sm outline-none border border-slate-700">
-            <textarea id="new-bio" class="w-full bg-slate-800 p-3 rounded-xl mb-4 text-sm outline-none border border-slate-700">{{ user.bio }}</textarea>
-            <button onclick="saveProfile()" class="w-full bg-blue-600 py-3 rounded-xl font-bold">Сохранить</button>
-            <button onclick="document.getElementById('profile-modal').classList.add('hidden')" class="w-full mt-2 text-slate-500 text-xs">Закрыть</button>
+    <div id="call-ui" class="hidden fixed inset-0 z-[1000] bg-slate-950/95 flex flex-col items-center justify-center backdrop-blur-xl">
+        <div class="w-32 h-32 bg-blue-600 rounded-full calling flex items-center justify-center text-5xl mb-6 shadow-2xl">📞</div>
+        <h2 id="caller-name" class="text-2xl font-bold mb-12">Входящий звонок...</h2>
+        <div class="flex gap-12">
+            <button onclick="ans(false)" class="bg-red-500 p-8 rounded-full hover:scale-110 transition-all"><i data-lucide="phone-off"></i></button>
+            <button onclick="ans(true)" class="bg-green-500 p-8 rounded-full hover:scale-110 transition-all"><i data-lucide="phone"></i></button>
         </div>
     </div>
 
@@ -98,7 +93,7 @@
         const socket = io();
         let cur = null, isG = false, myId = "{{ user._id }}";
 
-        // --- СТАТУС ПЕЧАТАЕТ ---
+        // ТАЙПИНГ
         let t_to;
         document.getElementById('min').addEventListener('input', () => {
             if(!cur) return;
@@ -108,104 +103,79 @@
         });
 
         socket.on('is_typing', d => {
-            const el = document.getElementById('typing-indicator');
-            if(d.st) {
-                el.classList.remove('hidden');
-                document.getElementById('t-user').innerText = d.is_g ? d.name + ' печатает' : 'печатает';
-            } else el.classList.add('hidden');
+            const el = document.getElementById('t-box');
+            if(d.st) { el.classList.remove('hidden'); document.getElementById('t-user').innerText = d.is_g ? d.name + ' печатает' : 'печатает'; }
+            else el.classList.add('hidden');
         });
 
-        // --- СООБЩЕНИЯ И УВЕДОМЛЕНИЯ ---
+        // СООБЩЕНИЯ
         socket.on('new_msg', m => {
             if(m.room === cur) renderM(m);
-            if(m.sid !== myId) {
-                document.getElementById('snd-msg').play();
-                if("Notification" in window && Notification.permission === "granted") {
-                    new Notification(m.name, { body: m.txt || "Медиафайл" });
-                }
-            }
+            if(m.sid !== myId) document.getElementById('snd-msg').play();
         });
 
         socket.on('incoming_call', d => {
             document.getElementById('call-ui').classList.remove('hidden');
-            document.getElementById('caller').innerText = d.from + " звонит...";
+            document.getElementById('caller-name').innerText = d.from + " звонит...";
             document.getElementById('snd-call').play();
         });
 
         function renderM(m) {
             const me = m.sid === myId;
-            let body = `<p class="text-sm">${m.txt || ''}</p>`;
+            let body = `<p class="text-sm leading-relaxed">${m.txt || ''}</p>`;
             if(m.type==='circle') body=`<video src="${m.url}" class="circle-vid" autoplay loop muted></video>`;
-            if(m.type==='file') {
-                if(m.url.startsWith('data:image')) body=`<img src="${m.url}" class="rounded-xl max-w-full">`;
-                else body=`<a href="${m.url}" download class="text-blue-400 text-xs underline">📁 Документ: ${m.txt}</a>`;
-            }
-            if(m.type==='voice') body=`<audio src="${m.url}" controls class="h-8"></audio>`;
-
-            const html = `<div id="m-${m._id}" class="flex ${me?'justify-end':'justify-start'}">
-                <div class="max-w-[80%] p-3 rounded-2xl ${me?'bg-blue-600 text-white':'bg-slate-800'} relative group shadow-lg">
-                    <p onclick="showUserProfile('${m.sid}')" class="text-[9px] font-bold opacity-50 mb-1 cursor-pointer hover:underline">${m.name}</p>
+            if(m.type==='file') body=`<a href="${m.url}" download class="flex items-center gap-2 text-blue-300 text-xs italic"><i data-lucide="file"></i> ${m.txt}</a>`;
+            
+            const html = `<div class="flex ${me?'justify-end':'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div class="max-w-[75%] p-4 ${me?'msg-out text-white':'msg-in glass text-slate-100'} shadow-xl relative group">
+                    ${!me ? `<p class="text-[10px] font-black text-blue-400 mb-1 uppercase tracking-tighter">${m.name}</p>` : ''}
                     ${body}
-                    <div class="flex gap-1 mt-1">${Object.entries(m.reacts||{}).map(([e,c])=>`<span class="text-[10px] bg-black/20 rounded px-1">${e}${c}</span>`).join('')}</div>
-                    <div class="absolute -right-12 top-0 hidden group-hover:flex flex-col gap-1">
-                        <button onclick="socket.emit('add_react', {mid:'${m._id}', emoji:'❤️', room:'${cur}'})">❤️</button>
-                        <button onclick="socket.emit('del_msg', {mid:'${m._id}'})" class="text-red-500">✕</button>
-                    </div>
+                    <button onclick="socket.emit('del_msg', {mid:'${m._id}'})" class="hidden group-hover:block absolute -top-2 -right-2 bg-red-500 rounded-full p-1 text-[8px] border-2 border-slate-900">✕</button>
                 </div>
             </div>`;
             document.getElementById('win').insertAdjacentHTML('beforeend', html);
             document.getElementById('win').scrollTop = document.getElementById('win').scrollHeight;
+            lucide.createIcons();
         }
 
-        // --- ПРОФИЛЬ (ЗАГРУЗКА АВАТАРА ЧЕРЕЗ ФАЙЛ) ---
-        function uploadAv() {
-            const file = document.getElementById('av-input').files[0];
-            const r = new FileReader();
-            r.onload = () => {
-                document.getElementById('my-av-edit').src = r.result;
-                document.getElementById('my-av-nav').src = r.result;
-            };
-            r.readAsDataURL(file);
-        }
-
-        async function saveProfile() {
-            const d = { 
-                name: document.getElementById('new-name').value, 
-                bio: document.getElementById('new-bio').value,
-                av: document.getElementById('my-av-edit').src 
-            };
-            await fetch('/api/profile/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});
-            location.reload();
-        }
-
-        // --- ФУНКЦИИ ГРУПП И ПОИСКА ---
         async function openChat(id, title, type) {
             cur = id; isG = type === 'group';
-            document.body.classList.add('mobile-view');
+            document.body.classList.add('mobile-chat-active');
             document.getElementById('r-title').innerText = title;
             document.getElementById('win').innerHTML = '';
-            document.getElementById('del-chat-btn').classList.toggle('hidden', !isG);
             socket.emit('join', {room: id});
-            
-            const r = await fetch(`/api/history/${id}`);
-            const data = await r.json();
-            data.forEach(renderM);
             
             if(!isG) {
                 document.getElementById('r-status').innerText = 'был(а) недавно';
             } else {
-                document.getElementById('r-status').innerText = 'группа';
+                document.getElementById('r-status').innerText = 'Групповой чат';
+                loadMembers(id);
             }
+
+            const r = await fetch(`/api/history/${id}`);
+            const data = await r.json();
+            data.forEach(renderM);
+        }
+
+        async function loadMembers(gid) {
+            const r = await fetch(`/api/group_members/${gid}`);
+            const users = await r.json();
+            document.getElementById('member-list').innerHTML = users.map(u => `
+                <div class="flex items-center gap-3 p-2 hover:bg-slate-800 rounded-xl cursor-pointer transition-colors">
+                    <img src="${u.av}" class="w-8 h-8 rounded-full border border-blue-500">
+                    <p class="text-xs font-bold">${u.name}</p>
+                </div>
+            `).join('');
         }
 
         async function globalSearch(q) {
             if(q.length < 2) { loadChats(); return; }
-            const r = await fetch(`/api/search_global/${q}`);
+            const r = await fetch(`/api/search_global/${q}`); // Тут нужен роут из прошлого кода
             const users = await r.json();
             document.getElementById('chat-list').innerHTML = users.map(u => `
-                <div onclick="openChat('${u._id}', '${u.name}', 'private')" class="p-3 bg-blue-600/10 rounded-xl mb-2 cursor-pointer flex items-center gap-3">
-                    <img src="${u.av}" class="w-8 h-8 rounded-full object-cover">
-                    <p class="font-bold text-xs">${u.name} (@${u.username})</p>
+                <div onclick="openChat('${u._id}', '${u.name}', 'private')" class="p-3 glass rounded-2xl mb-2 flex items-center gap-3 cursor-pointer">
+                    <img src="${u.av}" class="w-10 h-10 rounded-full object-cover">
+                    <div><p class="font-bold text-xs">${u.name}</p><p class="text-[9px] opacity-50">@${u.username}</p></div>
                 </div>
             `).join('');
         }
@@ -214,31 +184,12 @@
             const r = await fetch('/api/groups');
             const gs = await r.json();
             document.getElementById('chat-list').innerHTML = gs.map(g => `
-                <div onclick="openChat('${g._id}', '${g.title}', 'group')" class="p-4 bg-slate-800/50 rounded-2xl mb-2 cursor-pointer hover:bg-blue-600/20">
+                <div onclick="openChat('${g._id}', '${g.title}', 'group')" class="p-4 glass rounded-2xl mb-2 flex items-center justify-between cursor-pointer hover:border-blue-500 transition-all">
                     <p class="font-bold text-sm"># ${g.title}</p>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-slate-600"></i>
                 </div>
             `).join('');
-        }
-
-        // --- МУЛЬТИМЕДИА ---
-        async function recordCircle() {
-            const s = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-            const mr = new MediaRecorder(s); let ch = [];
-            mr.ondataavailable = e => ch.push(e.data);
-            mr.onstop = () => {
-                const f = new FileReader();
-                f.onload = () => socket.emit('msg', {room: cur, type:'circle', url: f.result});
-                f.readAsDataURL(new Blob(ch, {type:'video/mp4'}));
-                s.getTracks().forEach(t => t.stop());
-            };
-            mr.start(); setTimeout(() => mr.stop(), 5000);
-        }
-
-        function sendAnyFile() {
-            const file = document.getElementById('f-msg').files[0];
-            const r = new FileReader();
-            r.onload = () => socket.emit('msg', {room: cur, type: 'file', url: r.result, txt: file.name});
-            r.readAsDataURL(file);
+            lucide.createIcons();
         }
 
         function send() {
@@ -247,19 +198,17 @@
             document.getElementById('min').value = '';
         }
 
-        function startCall() { socket.emit('call_start', {room: cur}); }
-        function ansCall(v) { document.getElementById('call-ui').classList.add('hidden'); document.getElementById('snd-call').pause(); }
-        function toggleTheme() { document.body.classList.toggle('dark'); }
-        function back() { document.body.classList.remove('mobile-view'); }
+        function exitChat() { document.body.classList.remove('mobile-chat-active'); }
+        function toggleMembers() { document.getElementById('member-side').classList.toggle('hidden'); }
+        function startCall() { socket.emit('call_init', {room: cur}); }
+        function ans(v) { document.getElementById('call-ui').classList.add('hidden'); document.getElementById('snd-call').pause(); }
         
         async function createGrp() {
-            const t = prompt("Название группы:");
+            const t = prompt("Имя группы:");
             if(t) { await fetch('/api/groups', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({t: t})}); loadChats(); }
         }
 
-        // Инициализация
         loadChats();
-        if("Notification" in window) Notification.requestPermission();
     </script>
 </body>
 </html>

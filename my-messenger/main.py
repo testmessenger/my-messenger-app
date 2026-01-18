@@ -11,9 +11,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'nexus_core_global_2026'
+app.config['SECRET_KEY'] = 'nexus_ultra_final_2026'
 
-# Подключение к MongoDB
 MONGO_URI = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 client = MongoClient(MONGO_URI)
 db = client['messenger_db']
@@ -25,8 +24,6 @@ def get_user():
         return db.users.find_one({"_id": ObjectId(session['user_id'])})
     return None
 
-# --- МАРШРУТЫ (ROUTES) ---
-
 @app.route('/')
 def index():
     user = get_user()
@@ -34,38 +31,43 @@ def index():
     return render_template('index.html', user=user)
 
 @app.route('/auth')
-def auth():
-    return render_template('auth.html')
+def auth(): return render_template('auth.html')
 
-@app.route('/api/register', methods=['POST'])
-def register():
-    username = request.form.get('username')
-    password = request.form.get('password')
-    if db.users.find_one({"username": username}): return "Пользователь уже существует", 400
-    
-    user_id = db.users.insert_one({
-        "username": username,
-        "display_name": username,
-        "password": generate_password_hash(password),
-        "avatar": f"https://ui-avatars.com/api/?name={username}&background=random",
-        "bio": "Nexus User",
-        "theme": "dark"
-    }).inserted_id
-    
-    session['user_id'] = str(user_id)
-    return redirect(url_for('index'))
-
+# --- API: ПРОФИЛЬ И АВАТАР ---
 @app.route('/api/profile/save', methods=['POST'])
 def save_profile():
     user = get_user()
-    if not user: return jsonify({"error": "unauthorized"}), 401
+    if not user: return jsonify({"error": "401"}), 401
     data = request.json
-    db.users.update_one({"_id": user['_id']}, {"$set": {
+    update_data = {
         "display_name": data.get('name'),
-        "bio": data.get('bio'),
-        "avatar": data.get('avatar')
-    }})
+        "bio": data.get('bio')
+    }
+    if data.get('avatar'): # Если аватар был загружен
+        update_data["avatar"] = data.get('avatar')
+        
+    db.users.update_one({"_id": user['_id']}, {"$set": update_data})
     return jsonify({"status": "ok"})
+
+@app.route('/api/user/<user_id>')
+def get_user_info(user_id):
+    u = db.users.find_one({"_id": ObjectId(user_id)}, {"password": 0})
+    if u:
+        u['_id'] = str(u['_id'])
+        return jsonify(u)
+    return jsonify({"error": "not found"}), 404
+
+# --- API: УЧАСТНИКИ И ПОИСК ---
+@app.route('/api/room/<room_id>/members')
+def get_members(room_id):
+    if room_id == 'general':
+        users = list(db.users.find({}, {"password": 0}).limit(50))
+    else:
+        group = db.groups.find_one({"_id": ObjectId(room_id)})
+        if not group: return jsonify([])
+        users = list(db.users.find({"_id": {"$in": [ObjectId(m) for m in group.get('members', [])]}}, {"password": 0}))
+    for u in users: u['_id'] = str(u['_id'])
+    return jsonify(users)
 
 @app.route('/api/search')
 def search():
@@ -75,29 +77,26 @@ def search():
     for x in users + groups: x['_id'] = str(x['_id'])
     return jsonify({"users": users, "groups": groups})
 
-@app.route('/api/room/<room_id>/members')
-def get_members(room_id):
-    if room_id == 'general':
-        users = list(db.users.find({}, {"password": 0}).limit(50))
-    else:
-        # Для ЛС (ID1_ID2) или Групп (24 знака)
-        if "_" in room_id:
-            ids = [ObjectId(x) for x in room_id.split("_")]
-            users = list(db.users.find({"_id": {"$in": ids}}, {"password": 0}))
-        else:
-            group = db.groups.find_one({"_id": ObjectId(room_id)})
-            users = list(db.users.find({"_id": {"$in": [ObjectId(m) for m in group['members']]}}, {"password": 0}))
-    for u in users: u['_id'] = str(u['_id'])
-    return jsonify(users)
-
 @app.route('/api/upload', methods=['POST'])
 def upload():
     file = request.files['file']
     encoded = base64.b64encode(file.read()).decode('utf-8')
     return jsonify({"url": f"data:{file.content_type};base64,{encoded}"})
 
-# --- SOCKET.IO ---
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.form
+    if db.users.find_one({"username": data['username']}): return "Error", 400
+    uid = db.users.insert_one({
+        "username": data['username'], "display_name": data['username'],
+        "password": generate_password_hash(data['password']),
+        "avatar": f"https://ui-avatars.com/api/?name={data['username']}",
+        "bio": "Nexus User"
+    }).inserted_id
+    session['user_id'] = str(uid)
+    return redirect(url_for('index'))
 
+# --- SOCKET.IO ---
 @socketio.on('join_room')
 def on_join(data):
     room = data['room']
@@ -110,16 +109,11 @@ def on_join(data):
 @socketio.on('send_msg')
 def handle_msg(data):
     user = get_user()
-    if not user: return
     msg_obj = {
-        "room": data['room'],
-        "sender_id": str(user['_id']),
-        "sender_name": user['display_name'],
-        "sender_avatar": user['avatar'],
-        "text": data.get('text', ''),
-        "type": data.get('type', 'text'),
-        "file_url": data.get('file_url', ''),
-        "ts": datetime.datetime.utcnow().isoformat()
+        "room": data['room'], "sender_id": str(user['_id']),
+        "sender_name": user['display_name'], "sender_avatar": user['avatar'],
+        "text": data.get('text', ''), "type": data.get('type', 'text'),
+        "file_url": data.get('file_url', ''), "ts": datetime.datetime.utcnow().isoformat()
     }
     res = db.messages.insert_one(msg_obj)
     msg_obj['_id'] = str(res.inserted_id)

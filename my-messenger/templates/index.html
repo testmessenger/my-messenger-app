@@ -2,223 +2,197 @@
 <html lang="ru" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexus</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Messenger</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .video-note { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-        @media (max-width: 768px) {
-            .sidebar-hidden { transform: translateX(-100%); }
-            .main-full { left: 0 !important; }
-        }
+        .video-note { width: 180px; height: 180px; border-radius: 50%; border: 3px solid #3b82f6; object-fit: cover; }
+        .recording { animation: pulse 1.5s infinite; color: #ef4444; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        .msg-bubble:hover .react-bar { display: flex; }
     </style>
 </head>
-<body class="bg-[#020617] text-slate-200 flex h-screen overflow-hidden font-sans">
+<body class="bg-[#020617] text-slate-200 flex h-screen overflow-hidden">
 
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-full md:w-80 bg-[#0f172a] border-r border-slate-800 transition-transform duration-300 md:translate-x-0">
+    <aside class="w-80 border-r border-slate-800 flex flex-col bg-slate-900/40">
         <div class="p-4 flex justify-between items-center border-b border-slate-800/50">
-            <h1 class="text-2xl font-black text-blue-500 italic tracking-tighter">NEXUS</h1>
-            <button onclick="openCreateGroup()" class="p-2 bg-blue-600/10 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition">
-                <i data-lucide="plus"></i>
-            </button>
+            <h1 class="text-xl font-black text-blue-500 italic">NEXUS</h1>
+            <button onclick="createGroup()" class="bg-blue-600 p-2 rounded-lg text-white"><i data-lucide="plus"></i></button>
         </div>
-        
-        <div class="p-4">
-            <div class="relative">
-                <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-500"></i>
-                <input id="searchInp" oninput="runSearch()" placeholder="Поиск людей и групп..." class="w-full bg-slate-900/50 border border-slate-800 py-2 pl-10 pr-4 rounded-xl text-sm outline-none focus:border-blue-500 transition">
+        <div id="chats-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+            <div onclick="switchRoom('general', 'Общий чат')" class="p-3 rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">#</div> <b>Общий чат</b>
             </div>
-        </div>
-
-        <div id="chats" class="flex-1 overflow-y-auto px-2 space-y-1">
-            <div onclick="switchRoom('general', 'Общий чат')" class="p-4 rounded-2xl cursor-pointer hover:bg-slate-800/50 flex items-center gap-3 transition group">
-                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">#</div>
-                <span class="font-bold">Общий чат</span>
-            </div>
-            <div id="search-results" class="pt-2 border-t border-slate-800/50"></div>
-        </div>
-
-        <div class="p-4 border-t border-slate-800 flex items-center gap-3 bg-slate-900/20 cursor-pointer" onclick="openSettings()">
-            <img src="{{ user.avatar }}" class="w-12 h-12 rounded-2xl border-2 border-blue-500 object-cover shadow-xl">
-            <div class="flex-1 min-w-0">
-                <p class="font-black text-sm truncate">{{ user.display_name }}</p>
-                <p class="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Профиль</p>
-            </div>
+            <div id="my-groups-list"></div>
         </div>
     </aside>
 
-    <main id="main-chat" class="flex-1 flex flex-col w-full transition-all duration-300 md:ml-80">
-        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 bg-[#020617]/80 backdrop-blur-xl z-10">
-            <div class="flex items-center gap-3">
-                <button onclick="toggleSidebar(true)" class="md:hidden p-2 text-slate-400"><i data-lucide="menu"></i></button>
-                <h2 id="header-title" class="font-black text-lg">Общий чат</h2>
+    <main class="flex-1 flex flex-col relative">
+        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/20">
+            <h2 id="header-title" class="font-bold text-lg">Общий чат</h2>
+            <div class="flex gap-4">
+                <button id="call-btn" class="hidden text-green-500" onclick="startCall()"><i data-lucide="phone"></i></button>
+                <button onclick="handleInfoClick()"><i data-lucide="info"></i></button>
             </div>
-            <button onclick="handleInfoClick()" class="p-2 text-slate-400 hover:text-white"><i data-lucide="info"></i></button>
         </header>
 
-        <div id="chat-window" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]"></div>
+        <div id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
 
-        <footer class="p-3 md:p-4 bg-[#0f172a]/50 border-t border-slate-800">
-            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-900/80 p-2 rounded-2xl border border-slate-800 shadow-2xl">
-                <input type="file" id="fInp" class="hidden" onchange="uploadFile(this, 'msg')">
-                <button onclick="document.getElementById('fInp').click()" class="p-2 text-slate-500"><i data-lucide="paperclip"></i></button>
-                <textarea id="msgInput" rows="1" placeholder="Ваше сообщение..." class="flex-1 bg-transparent py-2 px-1 outline-none resize-none text-sm"></textarea>
-                <button onclick="recordCircle()" class="p-2 text-red-500 bg-red-500/10 rounded-xl"><i data-lucide="video"></i></button>
-                <button onclick="send()" class="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20"><i data-lucide="send"></i></button>
+        <footer class="p-4 bg-slate-900/50">
+            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-900 p-2 rounded-2xl border border-slate-800">
+                <button onclick="toggleStickers()" class="p-2"><i data-lucide="smile"></i></button>
+                <textarea id="msgInput" rows="1" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); send();}" placeholder="Сообщение..." class="flex-1 bg-transparent p-2 outline-none resize-none"></textarea>
+                
+                <button id="recordBtn" 
+                    onmousedown="startVoice()" 
+                    onmouseup="stopVoice()" 
+                    onclick="takeVideoCircle()" 
+                    class="p-2 text-slate-400">
+                    <i data-lucide="mic" id="mic-icon"></i>
+                </button>
+                
+                <button onclick="send()" class="p-2 bg-blue-600 rounded-xl"><i data-lucide="send"></i></button>
             </div>
         </footer>
 
-        <div id="info-panel" class="hidden absolute inset-y-0 right-0 w-full md:w-72 bg-[#0f172a] border-l border-slate-800 z-[60] p-6 shadow-2xl">
-            <div class="flex justify-between items-center mb-8">
-                <h3 id="info-type" class="text-blue-500 font-black text-xs uppercase tracking-widest">Инфо</h3>
-                <button onclick="closeInfo()" class="p-2 bg-slate-800 rounded-lg"><i data-lucide="x" class="w-4 h-4"></i></button>
-            </div>
-            <div id="info-content" class="space-y-6"></div>
+        <div id="info-panel" class="hidden absolute right-0 top-0 bottom-0 w-72 bg-slate-900 border-l border-slate-800 z-50 p-6">
+            <div id="info-content"></div>
+        </div>
+        
+        <div id="sticker-box" class="hidden absolute bottom-20 left-10 bg-slate-800 p-4 rounded-2xl grid grid-cols-4 gap-2 border border-slate-700">
+            <button onclick="sendSticker('🔥')">🔥</button>
+            <button onclick="sendSticker('😂')">😂</button>
+            <button onclick="sendSticker('❤️')">❤️</button>
+            <button onclick="sendSticker('⚡')">⚡</button>
         </div>
     </main>
-
-    <div id="settings-modal" class="hidden fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-[#0f172a] w-full max-w-sm rounded-[32px] p-8 border border-slate-800 shadow-2xl">
-            <h2 class="text-2xl font-black mb-6 text-center">Профиль</h2>
-            <div class="flex flex-col items-center mb-6">
-                <img id="preview-avatar" src="{{ user.avatar }}" class="w-28 h-28 rounded-3xl border-4 border-blue-600 object-cover mb-4">
-                <input type="file" id="avatarFile" class="hidden" onchange="uploadFile(this, 'avatar')">
-                <button onclick="document.getElementById('avatarFile').click()" class="text-xs text-blue-400 font-bold uppercase tracking-tighter">Изменить фото</button>
-            </div>
-            <div class="space-y-4">
-                <input id="set-name" value="{{ user.display_name }}" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none focus:border-blue-500">
-                <textarea id="set-bio" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none focus:border-blue-500 h-24">{{ user.bio }}</textarea>
-                <div class="flex gap-2">
-                    <button onclick="saveProfile()" class="flex-1 bg-blue-600 py-4 rounded-2xl font-black shadow-lg shadow-blue-500/20">ГОТОВО</button>
-                    <button onclick="document.getElementById('settings-modal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 rounded-2xl font-black">ОТМЕНА</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script>
         lucide.createIcons();
         const socket = io();
-        let currentRoom = "general";
-        let lastUploadedAvatar = null;
+        let currentRoom = 'general';
         const myId = "{{ user._id }}";
+        let mediaRecorder;
+        let audioChunks = [];
 
-        function toggleSidebar(show) {
-            const sb = document.getElementById('sidebar');
-            sb.style.transform = show ? 'translateX(0)' : 'translateX(-100%)';
+        // --- ГРУППЫ И ЧАТЫ ---
+        async function loadChats() {
+            const res = await fetch('/api/my_chats');
+            const groups = await res.json();
+            const list = document.getElementById('my-groups-list');
+            list.innerHTML = groups.map(g => `
+                <div onclick="switchRoom('${g._id}', '${g.title}')" class="p-3 rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-3">
+                    <div class="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center font-bold">${g.title[0]}</div>
+                    <span class="text-sm font-bold">${g.title}</span>
+                </div>
+            `).join('');
         }
+        loadChats();
 
-        async function openCreateGroup() {
-            const title = prompt("Название новой группы:");
-            if(!title) return;
-            const res = await fetch('/api/groups/create', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title})
-            });
-            const data = await res.json();
-            switchRoom(data.id, data.title);
+        async function createGroup() {
+            const t = prompt("Название группы:");
+            if(!t) return;
+            const res = await fetch('/api/groups/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:t})});
+            const d = await res.json();
+            loadChats();
+            switchRoom(d.id, t);
         }
 
         function switchRoom(id, title) {
             currentRoom = id;
             document.getElementById('header-title').innerText = title;
             document.getElementById('chat-window').innerHTML = '';
+            document.getElementById('call-btn').classList.toggle('hidden', id.length === 24 || id === 'general');
             socket.emit('join_room', {room: id});
-            closeInfo();
-            if(window.innerWidth < 768) toggleSidebar(false);
         }
 
+        // --- ЗАПИСЬ (КРУЖКИ И ГОЛОСОВЫЕ) ---
+        let holdTimer;
+        function startVoice() {
+            holdTimer = setTimeout(async () => {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/ogg' });
+                    const fd = new FormData(); fd.append('file', blob);
+                    const res = await fetch('/api/upload', {method:'POST', body:fd});
+                    const d = await res.json();
+                    socket.emit('send_msg', { room: currentRoom, type: 'voice', file_url: d.url });
+                };
+                mediaRecorder.start();
+                document.getElementById('mic-icon').classList.add('recording');
+            }, 300);
+        }
+
+        function stopVoice() {
+            clearTimeout(holdTimer);
+            if(mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                document.getElementById('mic-icon').classList.remove('recording');
+            }
+        }
+
+        async function takeVideoCircle() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const recorder = new MediaRecorder(stream);
+            let chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'video/mp4' });
+                const fd = new FormData(); fd.append('file', blob);
+                const res = await fetch('/api/upload', {method:'POST', body:fd});
+                const d = await res.json();
+                socket.emit('send_msg', { room: currentRoom, type: 'video_circle', file_url: d.url });
+            };
+            recorder.start();
+            setTimeout(()=>recorder.stop(), 5000);
+        }
+
+        // --- УПРАВЛЕНИЕ УЧАСТНИКАМИ (РАНГИ) ---
         async function handleInfoClick() {
             const panel = document.getElementById('info-panel');
-            const content = document.getElementById('info-content');
-            const typeHeader = document.getElementById('info-type');
             panel.classList.toggle('hidden');
             if(panel.classList.contains('hidden')) return;
+            
+            const res = await fetch(`/api/room/${currentRoom}/members`);
+            const members = await res.json();
+            
+            // Здесь логика Владельца
+            document.getElementById('info-content').innerHTML = `
+                <h3 class="font-black text-xs uppercase text-blue-500 mb-4">Участники</h3>
+                <div class="space-y-4">
+                    ${members.map(m => `
+                        <div class="flex items-center justify-between group cursor-pointer" onclick="manageMember('${m._id}', '${m.display_name}')">
+                            <div class="flex items-center gap-2">
+                                <img src="${m.avatar}" class="w-8 h-8 rounded-full">
+                                <div>
+                                    <p class="text-sm font-bold">${m.display_name}</p>
+                                    <p class="text-[9px] text-blue-400 font-bold uppercase">Участник</p>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>`;
+        }
 
-            if (currentRoom === 'general' || currentRoom.length === 24) {
-                typeHeader.innerText = "Участники группы";
-                const res = await fetch(`/api/room/${currentRoom}/members`);
-                const members = await res.json();
-                content.innerHTML = members.map(m => `
-                    <div class="flex items-center gap-4 p-3 bg-slate-900/50 rounded-2xl border border-slate-800/50">
-                        <img src="${m.avatar}" class="w-10 h-10 rounded-xl object-cover">
-                        <div class="min-w-0"><p class="font-bold text-sm truncate">${m.display_name}</p><p class="text-[9px] text-blue-500 uppercase font-black">Online</p></div>
-                    </div>`).join('');
-            } else {
-                typeHeader.innerText = "Карточка контакта";
-                const otherId = currentRoom.split('_').find(id => id !== myId);
-                const res = await fetch(`/api/user/${otherId}`);
-                const u = await res.json();
-                content.innerHTML = `
-                    <div class="flex flex-col items-center text-center">
-                        <img src="${u.avatar}" class="w-40 h-40 rounded-[40px] border-4 border-blue-600 mb-6 shadow-2xl">
-                        <h4 class="text-2xl font-black mb-1">${u.display_name}</h4>
-                        <p class="text-blue-500 text-xs font-bold mb-6 italic">@${u.username}</p>
-                        <div class="bg-slate-900/80 border border-slate-800 p-6 rounded-[24px] w-full text-sm leading-relaxed text-slate-400">"${u.bio}"</div>
-                    </div>`;
+        async function manageMember(tid, name) {
+            if (currentRoom === 'general') return;
+            const action = prompt(`Управление @${name}:\n1. Назначить админом\n2. Кикнуть\n3. Мут`);
+            let act = '';
+            if(action === '1') act = 'make_admin';
+            if(action === '2') act = 'kick';
+            if(action === '3') act = 'mute';
+            if(act) {
+                await fetch('/api/group/manage', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({room_id:currentRoom, target_id:tid, action:act})});
+                alert("Готово");
             }
         }
 
-        async function runSearch() {
-            const q = document.getElementById('searchInp').value;
-            if(!q) { document.getElementById('search-results').innerHTML = ''; return; }
-            const res = await fetch(`/api/search?q=${q}`);
-            const data = await res.json();
-            const box = document.getElementById('search-results');
-            box.innerHTML = '<p class="text-[10px] uppercase font-black text-slate-600 px-4 py-2">Результаты поиска</p>';
-            data.users.forEach(u => {
-                if(u._id === myId) return;
-                box.innerHTML += `<div onclick="openDM('${u._id}', '${u.username}')" class="p-4 mx-2 rounded-2xl flex items-center gap-3 hover:bg-blue-600/10 cursor-pointer transition">
-                    <img src="${u.avatar}" class="w-10 h-10 rounded-xl border border-blue-500/30">
-                    <div><p class="font-bold text-sm">${u.display_name}</p><p class="text-[10px] text-slate-500">@${u.username}</p></div>
-                </div>`;
-            });
-            data.groups.forEach(g => {
-                box.innerHTML += `<div onclick="switchRoom('${g._id}', '${g.title}')" class="p-4 mx-2 rounded-2xl flex items-center gap-3 hover:bg-slate-800 cursor-pointer">
-                    <div class="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center font-bold">#</div>
-                    <span class="font-bold text-sm">${g.title}</span>
-                </div>`;
-            });
-        }
-
-        function openDM(id, name) {
-            const room = [myId, id].sort().join("_");
-            switchRoom(room, `@${name}`);
-        }
-
-        async function uploadFile(inp, mode) {
-            if(!inp.files[0]) return;
-            const formData = new FormData();
-            formData.append('file', inp.files[0]);
-            const res = await fetch('/api/upload', {method: 'POST', body: formData});
-            const d = await res.json();
-            if(mode === 'avatar') {
-                lastUploadedAvatar = d.url;
-                document.getElementById('preview-avatar').src = d.url;
-            } else {
-                socket.emit('send_msg', { room: currentRoom, type: 'file', file_url: d.url, text: inp.files[0].name });
-            }
-        }
-
-        async function saveProfile() {
-            const data = {
-                name: document.getElementById('set-name').value,
-                bio: document.getElementById('set-bio').value,
-                avatar: lastUploadedAvatar
-            };
-            await fetch('/api/profile/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-            location.reload();
-        }
-
+        // --- СООБЩЕНИЯ, РЕАКЦИИ, СТИКЕРЫ ---
         function send() {
             const inp = document.getElementById('msgInput');
             if(!inp.value.trim()) return;
@@ -226,48 +200,39 @@
             inp.value = '';
         }
 
+        function sendSticker(s) {
+            socket.emit('send_msg', { room: currentRoom, text: s, type: 'sticker' });
+            document.getElementById('sticker-box').classList.add('hidden');
+        }
+
+        function toggleStickers() { document.getElementById('sticker-box').classList.toggle('hidden'); }
+
         socket.on('new_message', (data) => {
             const win = document.getElementById('chat-window');
             const isMe = data.sender_id === myId;
-            let content = `<p class="text-[15px] leading-relaxed">${data.text}</p>`;
-            if(data.type === 'video_circle') content = `<video src="${data.file_url}" class="video-note" controls autoplay loop muted></video>`;
-            if(data.type === 'file') content = `<a href="${data.file_url}" download class="flex items-center gap-2 text-blue-400 font-bold bg-blue-500/10 p-3 rounded-xl border border-blue-500/20"><i data-lucide="download" class="w-4 h-4"></i> ${data.text}</a>`;
+            let content = `<p>${data.text}</p>`;
+            
+            if(data.type === 'video_circle') content = `<video src="${data.file_url}" class="video-note" controls></video>`;
+            if(data.type === 'voice') content = `<audio src="${data.file_url}" controls class="w-full"></audio>`;
+            if(data.type === 'sticker') content = `<span class="text-6xl">${data.text}</span>`;
 
             win.insertAdjacentHTML('beforeend', `
-                <div id="msg-${data._id}" class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300">
-                    <div class="relative group ${isMe ? 'bg-blue-600 text-white rounded-[24px_24px_4px_24px]' : 'bg-slate-800/80 rounded-[24px_24px_24px_4px]'} p-4 max-w-[85%] shadow-xl">
-                        ${!isMe ? `<p class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">@${data.sender_name}</p>` : ''}
+                <div id="msg-${data._id}" class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+                    <div class="relative group msg-bubble ${isMe ? 'bg-blue-600' : 'bg-slate-800'} p-3 rounded-2xl max-w-[70%]">
                         ${content}
-                        <button onclick="deleteMsg('${data._id}')" class="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition">✕</button>
+                        <div class="react-bar hidden absolute -top-8 left-0 bg-slate-700 p-1 rounded-full gap-2 text-xs">
+                            <button onclick="addReact('${data._id}', '❤️')">❤️</button>
+                            <button onclick="addReact('${data._id}', '😂')">😂</button>
+                            <button onclick="addReact('${data._id}', '🔥')">🔥</button>
+                        </div>
                     </div>
                 </div>`);
             win.scrollTop = win.scrollHeight;
-            lucide.createIcons();
         });
 
-        function deleteMsg(id) { socket.emit('delete_msg', {msg_id: id}); }
-        socket.on('msg_deleted', (id) => { document.getElementById(`msg-${id}`)?.remove(); });
+        function addReact(mid, emoji) { socket.emit('add_reaction', {room: currentRoom, msg_id: mid, emoji: emoji}); }
 
-        async function recordCircle() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            const recorder = new MediaRecorder(stream);
-            let chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'video/mp4' });
-                const formData = new FormData();
-                formData.append('file', blob);
-                const res = await fetch('/api/upload', {method: 'POST', body: formData});
-                const d = await res.json();
-                socket.emit('send_msg', { room: currentRoom, type: 'video_circle', file_url: d.url });
-            };
-            recorder.start();
-            setTimeout(() => recorder.stop(), 7000);
-        }
-
-        socket.emit('join_room', {room: 'general'});
-        function openSettings() { document.getElementById('settings-modal').classList.remove('hidden'); }
-        function closeInfo() { document.getElementById('info-panel').classList.add('hidden'); }
+        function startCall() { alert("Звонок начат (WebRTC интерфейс в разработке)"); }
     </script>
 </body>
 </html>

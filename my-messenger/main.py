@@ -11,20 +11,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_RENDER_2026'
+app.config['SECRET_KEY'] = 'NEXUS_ULTIMATE_FULL_2026'
 
-# --- ИСПРАВЛЕННЫЙ БЛОК ПАПОК ДЛЯ RENDER ---
-UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
-if not os.path.exists(UPLOAD_FOLDER):
+# --- СТАБИЛЬНЫЙ БЛОК ПАПОК ДЛЯ RENDER ---
+UPLOAD_PATH = os.path.join(app.root_path, 'static', 'uploads')
+if not os.path.exists(UPLOAD_PATH):
     try:
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs(UPLOAD_PATH, exist_ok=True)
     except Exception as e:
         print(f"Directory info: {e}")
+app.config['UPLOAD_FOLDER'] = UPLOAD_PATH
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# ------------------------------------------
-
-# Подключение к MongoDB
+# --- БАЗА ДАННЫХ ---
 client = MongoClient("mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true")
 db = client['messenger_db']
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', max_http_buffer_size=100000000)
@@ -44,15 +42,12 @@ def get_u():
         return db.users.find_one({"_id": ObjectId(session['user_id'])})
     except: return None
 
-# --- РОУТЫ ---
+# --- API: ПРОФИЛЬ И ПОИСК ---
 
 @app.route('/')
 def index():
     u = get_u()
     return render_template('index.html', user=fix(u)) if u else redirect('/auth')
-
-@app.route('/auth')
-def auth_p(): return render_template('auth.html')
 
 @app.route('/api/auth', methods=['POST'])
 def handle_auth():
@@ -71,6 +66,15 @@ def handle_auth():
         else: return jsonify({"e": "Ошибка"}), 401
     return jsonify({"s": "ok"})
 
+@app.route('/api/search', methods=['GET'])
+def search_users():
+    q = request.args.get('q', '').replace('@', '')
+    if not q: return jsonify([])
+    # Ищем по username или названию групп
+    users = list(db.users.find({"username": {"$regex": q, "$options": "i"}}, {"pw":0}))
+    groups = list(db.groups.find({"title": {"$regex": q, "$options": "i"}}))
+    return jsonify({"users": fix(users), "groups": fix(groups)})
+
 @app.route('/api/profile/update', methods=['POST'])
 def update_profile():
     u = get_u()
@@ -81,6 +85,8 @@ def update_profile():
         "theme": d.get('theme'), "av": d.get('av')
     }})
     return jsonify({"s": "ok"})
+
+# --- API: ГРУППЫ И АДМИНКА ---
 
 @app.route('/api/groups', methods=['GET', 'POST'])
 def groups():
@@ -100,6 +106,22 @@ def groups():
         g['member_details'] = fix(list(db.users.find({"_id": {"$in": [ObjectId(m) for m in g['members']]}}, {"pw":0})))
     return jsonify(fix(gs))
 
+@app.route('/api/groups/admin_action', methods=['POST'])
+def admin_action():
+    u = get_u()
+    d = request.json # {gid, target_id, action: 'mute'|'ban'|'promote'}
+    g = db.groups.find_one({"_id": ObjectId(d['gid'])})
+    if not g or str(u['_id']) not in g['admins']: return "No rights", 403
+    
+    if d['action'] == 'mute':
+        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"muted": d['target_id']}})
+    elif d['action'] == 'ban':
+        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"banned": d['target_id']}, "$pull": {"members": d['target_id']}})
+    elif d['action'] == 'promote':
+        db.groups.update_one({"_id": g['_id']}, {"$addToSet": {"admins": d['target_id']}})
+    
+    return jsonify({"s": "ok"})
+
 @app.route('/api/upload', methods=['POST'])
 def upload():
     u = get_u()
@@ -114,7 +136,7 @@ def upload():
 def history(rid):
     return jsonify(fix(list(db.messages.find({"room": rid}).sort("ts", -1).limit(50))[::-1]))
 
-# --- SOCKETS (ЛОГИКА В РЕАЛЬНОМ ВРЕМЕНИ) ---
+# --- SOCKETS (REAL-TIME LOGIC) ---
 
 @socketio.on('connect')
 def on_connect():
@@ -135,13 +157,17 @@ def on_disconnect():
         online_users.pop(request.sid, None)
 
 @socketio.on('join')
-def on_join(d): join_room(d['room'])
+def on_join(d): 
+    # Если забанен, не пускаем в комнату
+    g = db.groups.find_one({"_id": ObjectId(d['room'])}) if len(d['room'])==24 else None
+    u = get_u()
+    if g and str(u['_id']) in g.get('banned', []): return
+    join_room(d['room'])
 
 @socketio.on('typing')
 def on_typing(d):
     u = get_u()
     if u:
-        # В группе передаем Имя, в ЛС просто статус
         emit('typing_ev', {
             "name": u['name'], 
             "room": d['room'], 
@@ -154,11 +180,12 @@ def on_msg(d):
     u = get_u()
     if not u: return
     
-    # Проверка на БАН и МУТ
     g = db.groups.find_one({"_id": ObjectId(d['room'])}) if len(d['room']) == 24 else None
     if g:
         if str(u['_id']) in g.get('banned', []): return
-        if str(u['_id']) in g.get('muted', []): return
+        if str(u['_id']) in g.get('muted', []): 
+            emit('error_ev', {"m": "Вы в муте"}, room=request.sid)
+            return
 
     m = {
         "room": d['room'], "sid": str(u['_id']), "name": u['name'], "av": u['av'],
@@ -174,7 +201,6 @@ def on_delete(d):
     msg = db.messages.find_one({"_id": ObjectId(d['mid'])})
     if not msg: return
     
-    # Права: автор сообщения или админ группы
     can_del = str(u['_id']) == msg['sid']
     if not can_del and len(d['room']) == 24:
         g = db.groups.find_one({"_id": ObjectId(d['room'])})
@@ -187,10 +213,8 @@ def on_delete(d):
 @socketio.on('call_init')
 def on_call(d):
     u = get_u()
-    if u:
-        emit('incoming_call', {"from": u['name'], "room": d['room']}, room=d['room'], include_self=False)
+    emit('incoming_call', {"from": u['name'], "room": d['room']}, room=d['room'], include_self=False)
 
 if __name__ == '__main__':
-    # Порт для Render
     port = int(os.environ.get('PORT', 10000))
     socketio.run(app, host='0.0.0.0', port=port)

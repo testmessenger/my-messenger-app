@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'nexus_ultra_final_2026'
+app.config['SECRET_KEY'] = 'nexus_global_mobile_2026'
 
 MONGO_URI = "mongodb+srv://adminbase:admin123@cluster0.iw8h40a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 client = MongoClient(MONGO_URI)
@@ -33,39 +33,49 @@ def index():
 @app.route('/auth')
 def auth(): return render_template('auth.html')
 
-# --- API: ПРОФИЛЬ И АВАТАР ---
+# --- API: ПРОФИЛЬ ---
 @app.route('/api/profile/save', methods=['POST'])
 def save_profile():
     user = get_user()
     if not user: return jsonify({"error": "401"}), 401
     data = request.json
-    update_data = {
-        "display_name": data.get('name'),
-        "bio": data.get('bio')
-    }
-    if data.get('avatar'): # Если аватар был загружен
-        update_data["avatar"] = data.get('avatar')
-        
-    db.users.update_one({"_id": user['_id']}, {"$set": update_data})
+    upd = {"display_name": data.get('name'), "bio": data.get('bio')}
+    if data.get('avatar'): upd["avatar"] = data.get('avatar')
+    db.users.update_one({"_id": user['_id']}, {"$set": upd})
     return jsonify({"status": "ok"})
 
 @app.route('/api/user/<user_id>')
 def get_user_info(user_id):
     u = db.users.find_one({"_id": ObjectId(user_id)}, {"password": 0})
-    if u:
-        u['_id'] = str(u['_id'])
-        return jsonify(u)
-    return jsonify({"error": "not found"}), 404
+    if u: u['_id'] = str(u['_id']); return jsonify(u)
+    return jsonify({"error": "404"}), 404
 
-# --- API: УЧАСТНИКИ И ПОИСК ---
+# --- API: ГРУППЫ (ИСПРАВЛЕНО) ---
+@app.route('/api/groups/create', methods=['POST'])
+def create_group():
+    user = get_user()
+    data = request.json
+    new_group = {
+        "title": data['title'],
+        "owner_id": str(user['_id']),
+        "members": [str(user['_id'])],
+        "admins": [str(user['_id'])],
+        "created_at": datetime.datetime.utcnow()
+    }
+    gid = db.groups.insert_one(new_group).inserted_id
+    return jsonify({"id": str(gid), "title": data['title']})
+
 @app.route('/api/room/<room_id>/members')
 def get_members(room_id):
     if room_id == 'general':
         users = list(db.users.find({}, {"password": 0}).limit(50))
     else:
-        group = db.groups.find_one({"_id": ObjectId(room_id)})
-        if not group: return jsonify([])
-        users = list(db.users.find({"_id": {"$in": [ObjectId(m) for m in group.get('members', [])]}}, {"password": 0}))
+        if "_" in room_id:
+            ids = [ObjectId(x) for x in room_id.split("_")]
+            users = list(db.users.find({"_id": {"$in": ids}}, {"password": 0}))
+        else:
+            group = db.groups.find_one({"_id": ObjectId(room_id)})
+            users = list(db.users.find({"_id": {"$in": [ObjectId(m) for m in group.get('members', [])]}}, {"password": 0}))
     for u in users: u['_id'] = str(u['_id'])
     return jsonify(users)
 

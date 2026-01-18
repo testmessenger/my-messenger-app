@@ -3,89 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus - Вход</title>
+    <title>Nexus - Auth</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        body { background: #020617; color: white; font-family: 'Inter', sans-serif; }
-        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.2); }
-        .input-nexus { background: rgba(0,0,0,0.3); border: 1px solid #1e293b; transition: 0.3s; }
-        .input-nexus:focus { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
-    </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4">
-
-    <div class="glass w-full max-w-md rounded-[2rem] p-8 shadow-2xl">
-        <div class="text-center mb-8">
-            <h1 class="text-4xl font-black italic text-blue-500 tracking-tighter">NEXUS</h1>
-            <p class="text-slate-400 text-sm mt-2" id="auth-title">Добро пожаловать в систему</p>
-        </div>
-
-        <div class="space-y-4">
-            <div class="relative">
-                <i data-lucide="user" class="absolute left-3 top-3 w-5 h-5 text-slate-500"></i>
-                <input type="text" id="username" placeholder="Имя пользователя" class="input-nexus w-full pl-10 pr-4 py-3 rounded-xl outline-none">
-            </div>
-            <div class="relative">
-                <i data-lucide="lock" class="absolute left-3 top-3 w-5 h-5 text-slate-500"></i>
-                <input type="password" id="password" placeholder="Пароль" class="input-nexus w-full pl-10 pr-4 py-3 rounded-xl outline-none">
-            </div>
-
-            <button onclick="handleAuth(false)" id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 py-4 rounded-xl font-bold transition transform active:scale-95">
-                Войти
-            </button>
-            
-            <div class="flex items-center gap-4 my-4">
-                <div class="h-[1px] bg-slate-800 flex-1"></div>
-                <span class="text-xs text-slate-500">ИЛИ</span>
-                <div class="h-[1px] bg-slate-800 flex-1"></div>
-            </div>
-
-            <button onclick="handleAuth(true)" class="w-full border border-slate-700 hover:bg-slate-800 py-4 rounded-xl font-bold transition">
-                Создать аккаунт
-            </button>
-        </div>
-
-        <p id="error-log" class="text-red-500 text-xs mt-4 text-center hidden"></p>
+<body class="bg-[#0b0e14] text-white h-screen flex items-center justify-center p-6">
+    <div class="w-full max-w-sm glass p-8 rounded-3xl border border-slate-800 flex flex-col bg-[#0f172a]">
+        <h1 class="text-3xl font-black text-blue-500 italic text-center mb-8">NEXUS LOGIN</h1>
+        <input id="un" type="text" placeholder="Username" class="bg-slate-800 p-4 rounded-2xl mb-4 outline-none border border-transparent focus:border-blue-500">
+        <input id="pw" type="password" placeholder="Password" class="bg-slate-800 p-4 rounded-2xl mb-8 outline-none border border-transparent focus:border-blue-500">
+        <button onclick="send(false)" class="bg-blue-600 p-4 rounded-2xl font-bold mb-3 transition-transform active:scale-95">ВОЙТИ</button>
+        <button onclick="send(true)" class="text-slate-500 text-sm">Нет аккаунта? Зарегистрироваться</button>
     </div>
-
     <script>
-        lucide.createIcons();
-
-        async function handleAuth(isReg) {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            const err = document.getElementById('error-log');
-
-            if(!u || !p) {
-                showError("Заполните все поля");
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: u, pw: p, reg: isReg })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    window.location.href = '/'; // Перенаправляем в чат
-                } else {
-                    showError(data.e || "Ошибка доступа");
-                }
-            } catch (e) {
-                showError("Сервер не отвечает");
-            }
-        }
-
-        function showError(text) {
-            const err = document.getElementById('error-log');
-            err.innerText = text;
-            err.classList.remove('hidden');
-            setTimeout(() => err.classList.add('hidden'), 3000);
+        async function send(reg) {
+            const r = await fetch('/api/auth', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: document.getElementById('un').value, pw: document.getElementById('pw').value, reg: reg})
+            });
+            if(r.ok) window.location.href = '/';
+            else alert("Ошибка");
         }
     </script>
 </body>

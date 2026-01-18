@@ -2,15 +2,17 @@
 <html lang="ru" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus Messenger</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexus Infinity</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .video-note { width: 180px; height: 180px; border-radius: 50%; border: 3px solid #3b82f6; object-fit: cover; }
-        #incoming-call-modal { animation: slideIn 0.5s ease; }
-        @keyframes slideIn { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+        .recording-pulse { animation: pulse 1s infinite; color: #ef4444; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .msg-bubble:hover .react-bar { display: flex; }
+        @media (max-width: 768px) { .sidebar-mobile { display: none; } .main-full { width: 100%; } }
     </style>
 </head>
 <body class="bg-[#020617] text-slate-200 flex h-screen overflow-hidden">
@@ -18,55 +20,84 @@
     <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
     <audio id="ringtone" src="https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3" loop></audio>
 
-    <aside class="w-80 border-r border-slate-800 flex flex-col bg-[#0f172a]">
+    <aside id="sidebar" class="w-80 border-r border-slate-800 flex flex-col bg-[#0f172a] transition-all">
         <div class="p-4 flex justify-between items-center border-b border-slate-800">
-            <h1 class="text-xl font-black text-blue-500">NEXUS</h1>
-            <button onclick="createGroup()" class="bg-blue-600 p-2 rounded-lg"><i data-lucide="plus"></i></button>
+            <h1 class="text-2xl font-black text-blue-500 italic">NEXUS</h1>
+            <button onclick="createGroup()" class="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20"><i data-lucide="plus"></i></button>
         </div>
-        <div id="chats-list" class="flex-1 overflow-y-auto p-2">
-            <div onclick="switchRoom('general', 'Общий чат')" class="p-3 hover:bg-slate-800 rounded-xl cursor-pointer"># Общий чат</div>
+        <div id="chats-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+            <div onclick="switchRoom('general', 'Общий чат')" class="p-4 rounded-2xl hover:bg-slate-800 cursor-pointer flex items-center gap-3 transition">
+                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 font-bold">#</div>
+                <span class="font-bold">Общий чат</span>
+            </div>
             <div id="my-groups-list"></div>
+        </div>
+        <div class="p-4 border-t border-slate-800 bg-slate-900/30 flex items-center gap-3 cursor-pointer" onclick="openSettings()">
+            <img src="{{ user.avatar }}" class="w-12 h-12 rounded-2xl border-2 border-blue-500 shadow-xl">
+            <div class="flex-1 min-w-0">
+                <p class="font-black text-sm truncate">{{ user.display_name }}</p>
+                <p class="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Профиль</p>
+            </div>
         </div>
     </aside>
 
     <main class="flex-1 flex flex-col relative">
-        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/40">
-            <h2 id="header-title" class="font-bold"># general</h2>
-            <button id="call-btn" onclick="initiateCall()" class="hidden bg-green-600 p-2 rounded-full text-white"><i data-lucide="phone"></i></button>
+        <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/40 backdrop-blur-md">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="md:hidden"><i data-lucide="menu"></i></button>
+                <h2 id="header-title" class="font-black text-lg"># general</h2>
+            </div>
+            <div class="flex gap-4">
+                <button id="call-btn" onclick="initiateCall()" class="hidden text-green-500 hover:scale-110 transition"><i data-lucide="phone"></i></button>
+                <button onclick="handleInfoClick()" class="text-slate-400 hover:text-white transition"><i data-lucide="info"></i></button>
+            </div>
         </header>
-        <div id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
-        <footer class="p-4 bg-slate-900/20">
-            <div class="max-w-4xl mx-auto flex items-center gap-2 bg-slate-800 p-2 rounded-2xl">
-                <textarea id="msgInput" rows="1" class="flex-1 bg-transparent p-2 outline-none resize-none"></textarea>
-                <button onmousedown="startVoice()" onmouseup="stopVoice()" onclick="takeVideoCircle()" class="p-2"><i data-lucide="mic" id="mic-icon"></i></button>
-                <button onclick="send()" class="p-3 bg-blue-600 rounded-xl"><i data-lucide="send"></i></button>
+
+        <div id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-4 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]"></div>
+
+        <footer class="p-4 bg-slate-900/40 border-t border-slate-800">
+            <div class="max-w-4xl mx-auto flex items-end gap-2 bg-slate-800/80 p-2 rounded-2xl border border-slate-700">
+                <button onclick="document.getElementById('sticker-box').classList.toggle('hidden')" class="p-2 text-slate-400"><i data-lucide="smile"></i></button>
+                <textarea id="msgInput" rows="1" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); send();}" placeholder="Напишите сообщение..." class="flex-1 bg-transparent p-2 outline-none resize-none text-sm"></textarea>
+                
+                <button id="recordBtn" onmousedown="startVoiceHold()" onmouseup="stopVoiceHold()" onclick="handleCircleClick()" class="p-2 text-slate-400">
+                    <i data-lucide="mic" id="mic-icon"></i>
+                </button>
+                
+                <button onclick="send()" class="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20"><i data-lucide="send"></i></button>
             </div>
         </footer>
 
-        <div id="call-overlay" class="hidden absolute inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center">
-            <div class="relative w-full h-full flex items-center justify-center">
-                <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
-                <video id="localVideo" autoplay playsinline muted class="absolute top-10 right-10 w-48 h-72 border-2 border-blue-500 rounded-2xl object-cover"></video>
-            </div>
-            <div class="absolute bottom-10 flex gap-6">
-                <button onclick="toggleMic()" id="mic-toggle" class="p-6 bg-slate-800 rounded-full"><i data-lucide="mic"></i></button>
-                <button onclick="toggleCam()" id="cam-toggle" class="p-6 bg-slate-800 rounded-full"><i data-lucide="video"></i></button>
-                <button onclick="endCall()" class="p-6 bg-red-600 rounded-full"><i data-lucide="phone-off"></i></button>
+        <div id="call-overlay" class="hidden fixed inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-center">
+            <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+            <video id="localVideo" autoplay playsinline muted class="absolute top-10 right-10 w-48 h-72 border-2 border-blue-500 rounded-3xl object-cover shadow-2xl"></video>
+            <div class="absolute bottom-12 flex gap-8">
+                <button onclick="toggleCallMic()" id="c-mic" class="p-6 bg-slate-800 rounded-full"><i data-lucide="mic"></i></button>
+                <button onclick="endCall()" class="p-6 bg-red-600 rounded-full shadow-lg shadow-red-500/40"><i data-lucide="phone-off"></i></button>
+                <button onclick="toggleCallCam()" id="c-cam" class="p-6 bg-slate-800 rounded-full"><i data-lucide="video"></i></button>
             </div>
         </div>
 
-        <div id="incoming-call-modal" class="hidden absolute top-5 left-1/2 -translate-x-1/2 w-80 bg-blue-600 p-4 rounded-3xl shadow-2xl z-[300] flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><i data-lucide="phone-incoming"></i></div>
-                <div>
-                    <p class="font-bold text-sm" id="caller-name-label">Вызов...</p>
-                    <p class="text-[10px] opacity-80 uppercase font-bold">Входящий звонок</p>
-                </div>
+        <div id="incoming-call-modal" class="hidden fixed top-10 left-1/2 -translate-x-1/2 w-80 bg-blue-600 p-5 rounded-[32px] shadow-2xl z-[600] flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center animate-bounce"><i data-lucide="phone-call"></i></div>
+                <div><p class="font-black text-sm" id="caller-name">Входящий...</p><p class="text-[9px] font-bold uppercase opacity-70">Nexus Call</p></div>
             </div>
             <div class="flex gap-2">
-                <button onclick="acceptCall()" class="p-2 bg-green-500 rounded-full"><i data-lucide="check"></i></button>
-                <button onclick="rejectCall()" class="p-2 bg-red-500 rounded-full"><i data-lucide="x"></i></button>
+                <button onclick="acceptCall()" class="p-3 bg-green-500 rounded-full"><i data-lucide="check"></i></button>
+                <button onclick="rejectCall()" class="p-3 bg-red-500 rounded-full"><i data-lucide="x"></i></button>
             </div>
+        </div>
+
+        <div id="sticker-box" class="hidden absolute bottom-24 left-10 bg-slate-800 p-4 rounded-3xl grid grid-cols-4 gap-3 border border-slate-700 shadow-2xl">
+            <button onclick="sendSticker('🔥')" class="text-3xl">🔥</button>
+            <button onclick="sendSticker('😂')" class="text-3xl">😂</button>
+            <button onclick="sendSticker('❤️')" class="text-3xl">❤️</button>
+            <button onclick="sendSticker('⚡')" class="text-3xl">⚡</button>
+        </div>
+
+        <div id="info-panel" class="hidden absolute right-0 top-0 bottom-0 w-80 bg-[#0f172a] border-l border-slate-800 z-[100] p-6 shadow-2xl transition-all">
+            <div id="info-content"></div>
         </div>
     </main>
 
@@ -76,43 +107,103 @@
         const myId = "{{ user._id }}";
         const myName = "{{ user.display_name }}";
         let currentRoom = "general";
-        let peerConnection;
-        let localStream;
-        let incomingOffer;
+        let pc, localStream, incomingData, mediaRecorder, audioChunks = [];
+        const pcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-        const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-
-        // --- УВЕДОМЛЕНИЯ ---
         Notification.requestPermission();
-        socket.on('notify', (data) => {
+        socket.on('notify', (d) => {
             document.getElementById('notif-sound').play();
-            if (Notification.permission === "granted") {
-                new Notification(data.title, { body: data.body });
-            }
+            if(Notification.permission==="granted") new Notification(d.title, {body: d.body});
         });
 
-        // --- ЛОГИКА ЗВОНКА (WebRTC) ---
+        async function loadChats() {
+            const res = await fetch('/api/my_chats');
+            const groups = await res.json();
+            document.getElementById('my-groups-list').innerHTML = groups.map(g => `
+                <div onclick="switchRoom('${g._id}', '${g.title}')" class="p-4 mx-2 rounded-2xl hover:bg-slate-800 cursor-pointer flex items-center gap-3 transition">
+                    <div class="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center font-bold text-blue-400">${g.title[0]}</div>
+                    <span class="font-black text-sm">${g.title}</span>
+                </div>
+            `).join('');
+        }
+        loadChats();
+
+        async function createGroup() {
+            const t = prompt("Название группы:");
+            if(!t) return;
+            const res = await fetch('/api/groups/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:t})});
+            const d = await res.json();
+            loadChats();
+            switchRoom(d.id, t);
+        }
+
+        function switchRoom(id, title) {
+            currentRoom = id;
+            document.getElementById('header-title').innerText = `# ${title}`;
+            document.getElementById('chat-window').innerHTML = '';
+            document.getElementById('call-btn').classList.toggle('hidden', id === 'general' || id.length === 24);
+            socket.emit('join_room', { room: id });
+        }
+
+        // --- УМНАЯ ЗАПИСЬ ---
+        let holdTimer;
+        function startVoiceHold() {
+            holdTimer = setTimeout(async () => {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/ogg' });
+                    const fd = new FormData(); fd.append('file', blob);
+                    const res = await fetch('/api/upload', {method:'POST', body:fd});
+                    const d = await res.json();
+                    socket.emit('send_msg', { room: currentRoom, type: 'voice', file_url: d.url });
+                };
+                mediaRecorder.start();
+                document.getElementById('mic-icon').classList.add('recording-pulse');
+            }, 400);
+        }
+        function stopVoiceHold() {
+            clearTimeout(holdTimer);
+            if(mediaRecorder?.state === 'recording') {
+                mediaRecorder.stop();
+                document.getElementById('mic-icon').classList.remove('recording-pulse');
+            }
+        }
+        async function handleCircleClick() {
+            if(mediaRecorder?.state === 'recording') return;
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const rec = new MediaRecorder(stream);
+            let ch = [];
+            rec.ondataavailable = e => ch.push(e.data);
+            rec.onstop = async () => {
+                const b = new Blob(ch, { type: 'video/mp4' });
+                const fd = new FormData(); fd.append('file', b);
+                const res = await fetch('/api/upload', {method:'POST', body:fd});
+                const d = await res.json();
+                socket.emit('send_msg', { room: currentRoom, type: 'video_circle', file_url: d.url });
+            };
+            rec.start(); setTimeout(()=>rec.stop(), 6000);
+        }
+
+        // --- ЗВОНКИ (WebRTC) ---
         async function initiateCall() {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             document.getElementById('localVideo').srcObject = localStream;
             document.getElementById('call-overlay').classList.remove('hidden');
-
-            peerConnection = new RTCPeerConnection(config);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-            peerConnection.onicecandidate = e => {
-                if (e.candidate) socket.emit('ice_candidate', { room: currentRoom, candidate: e.candidate });
-            };
-            peerConnection.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
-
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            socket.emit('call_user', { room: currentRoom, from: myId, caller_name: myName, offer: offer });
+            pc = new RTCPeerConnection(pcConfig);
+            localStream.getTracks().forEach(tr => pc.addTrack(tr, localStream));
+            pc.onicecandidate = e => e.candidate && socket.emit('ice_candidate', { room: currentRoom, candidate: e.candidate });
+            pc.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('call_user', { room: currentRoom, caller_name: myName, offer: offer });
         }
 
-        socket.on('incoming_call', async (data) => {
-            incomingOffer = data;
-            document.getElementById('caller-name-label').innerText = data.caller_name;
+        socket.on('incoming_call', d => {
+            incomingData = d;
+            document.getElementById('caller-name').innerText = d.caller_name;
             document.getElementById('incoming-call-modal').classList.remove('hidden');
             document.getElementById('ringtone').play();
         });
@@ -121,75 +212,91 @@
             document.getElementById('ringtone').pause();
             document.getElementById('incoming-call-modal').classList.add('hidden');
             document.getElementById('call-overlay').classList.remove('hidden');
-
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             document.getElementById('localVideo').srcObject = localStream;
-
-            peerConnection = new RTCPeerConnection(config);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-            
-            peerConnection.onicecandidate = e => {
-                if (e.candidate) socket.emit('ice_candidate', { room: currentRoom, candidate: e.candidate });
-            };
-            peerConnection.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
-
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingOffer.offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            socket.emit('answer_call', { room: currentRoom, answer: answer });
+            pc = new RTCPeerConnection(pcConfig);
+            localStream.getTracks().forEach(tr => pc.addTrack(tr, localStream));
+            pc.onicecandidate = e => e.candidate && socket.emit('ice_candidate', { room: currentRoom, candidate: e.candidate });
+            pc.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
+            await pc.setRemoteDescription(new RTCSessionDescription(incomingData.offer));
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            socket.emit('answer_call', { room: currentRoom, answer: ans });
         }
 
-        socket.on('call_accepted', async (data) => {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-        });
+        socket.on('call_accepted', d => pc.setRemoteDescription(new RTCSessionDescription(d.answer)));
+        socket.on('ice_candidate', c => pc?.addIceCandidate(new RTCIceCandidate(c)));
+        function endCall() { socket.emit('hangup', {room:currentRoom}); location.reload(); }
+        socket.on('call_ended', () => { alert("Звонок завершен"); location.reload(); });
 
-        socket.on('ice_candidate', c => peerConnection?.addIceCandidate(new RTCIceCandidate(c)));
-
-        function rejectCall() {
-            document.getElementById('ringtone').pause();
-            document.getElementById('incoming-call-modal').classList.add('hidden');
-            socket.emit('hangup', { room: currentRoom });
+        // --- УПРАВЛЕНИЕ УЧАСТНИКАМИ ---
+        async function handleInfoClick() {
+            const p = document.getElementById('info-panel');
+            p.classList.toggle('hidden');
+            if(p.classList.contains('hidden')) return;
+            const res = await fetch(`/api/room/${currentRoom}/members`);
+            const members = await res.json();
+            document.getElementById('info-content').innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-black text-xs uppercase text-blue-500">Участники</h3>
+                    <button onclick="document.getElementById('info-panel').classList.add('hidden')"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+                <div class="space-y-4">
+                    ${members.map(m => `
+                        <div class="flex items-center justify-between group p-2 hover:bg-slate-800 rounded-xl cursor-pointer" onclick="manageMember('${m._id}', '${m.display_name}')">
+                            <div class="flex items-center gap-3">
+                                <img src="${m.avatar}" class="w-10 h-10 rounded-xl border-2 border-blue-500/30">
+                                <div><p class="font-bold text-sm">${m.display_name}</p><p class="text-[9px] text-blue-400 font-black uppercase">Участник</p></div>
+                            </div>
+                        </div>`).join('')}
+                </div>`;
+            lucide.createIcons();
         }
 
-        function endCall() {
-            localStream?.getTracks().forEach(t => t.stop());
-            peerConnection?.close();
-            document.getElementById('call-overlay').classList.add('hidden');
-            socket.emit('hangup', { room: currentRoom });
+        async function manageMember(tid, name) {
+            if(currentRoom==='general') return;
+            const act = prompt(`Управление @${name}:\n1. Сделать админом\n2. Исключить`);
+            const action = act==='1'?'make_admin':act==='2'?'kick':null;
+            if(action) {
+                await fetch('/api/group/manage', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({room_id:currentRoom, target_id:tid, action:action})});
+                alert("Успешно");
+            }
         }
 
-        socket.on('call_ended', () => {
-            alert("Звонок завершен");
-            location.reload();
-        });
-
-        // Кнопки управления в звонке
-        function toggleMic() {
-            const track = localStream.getAudioTracks()[0];
-            track.enabled = !track.enabled;
-            document.getElementById('mic-toggle').classList.toggle('bg-red-500', !track.enabled);
-        }
-        function toggleCam() {
-            const track = localStream.getVideoTracks()[0];
-            track.enabled = !track.enabled;
-            document.getElementById('cam-toggle').classList.toggle('bg-red-500', !track.enabled);
-        }
-
-        // --- ОСТАЛЬНЫЕ ФУНКЦИИ (НЕ ВЫРЕЗАНО) ---
-        function switchRoom(id, title) {
-            currentRoom = id;
-            document.getElementById('header-title').innerText = title;
-            document.getElementById('chat-window').innerHTML = '';
-            document.getElementById('call-btn').classList.toggle('hidden', id === 'general' || id.length === 24);
-            socket.emit('join_room', { room: id });
-        }
-
+        // --- СООБЩЕНИЯ ---
         function send() {
-            const val = document.getElementById('msgInput').value;
-            if(!val) return;
-            socket.emit('send_msg', { room: currentRoom, text: val });
-            document.getElementById('msgInput').value = '';
+            const inp = document.getElementById('msgInput');
+            if(!inp.value.trim()) return;
+            socket.emit('send_msg', { room: currentRoom, text: inp.value });
+            inp.value = '';
         }
+
+        function sendSticker(s) {
+            socket.emit('send_msg', { room: currentRoom, text: s, type: 'sticker' });
+            document.getElementById('sticker-box').classList.add('hidden');
+        }
+
+        socket.on('new_message', (d) => {
+            const win = document.getElementById('chat-window');
+            const isMe = d.sender_id === myId;
+            let body = `<p class="text-[15px]">${d.text}</p>`;
+            if(d.type==='video_circle') body = `<video src="${d.file_url}" class="video-note" controls autoplay loop muted></video>`;
+            if(d.type==='voice') body = `<audio src="${d.file_url}" controls class="w-64"></audio>`;
+            if(d.type==='sticker') body = `<span class="text-7xl">${d.text}</span>`;
+
+            win.insertAdjacentHTML('beforeend', `
+                <div class="flex ${isMe?'justify-end':'justify-start'} animate-in slide-in-from-bottom-2 duration-300">
+                    <div class="relative group msg-bubble ${isMe?'bg-blue-600 shadow-blue-500/20':'bg-slate-800/80'} p-4 rounded-3xl max-w-[80%] shadow-xl">
+                        ${!isMe?`<p class="text-[9px] font-black text-blue-300 uppercase mb-1">@${d.sender_name}</p>`:''}
+                        ${body}
+                        <div class="react-bar hidden absolute -top-8 left-0 bg-slate-700 p-1 rounded-full gap-2 shadow-2xl">
+                            <button onclick="socket.emit('add_reaction', {room:currentRoom, msg_id:'${d._id}', emoji:'❤️'})">❤️</button>
+                            <button onclick="socket.emit('add_reaction', {room:currentRoom, msg_id:'${d._id}', emoji:'🔥'})">🔥</button>
+                        </div>
+                    </div>
+                </div>`);
+            win.scrollTop = win.scrollHeight;
+        });
     </script>
 </body>
 </html>
